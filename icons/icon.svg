@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#0F4A37"/>
+  <!-- stem of the P -->
+  <rect x="282" y="232" width="168" height="580" rx="84" fill="#D4F46A"/>
+  <!-- bowl of the P: an orange half-circle -->
+  <path d="M430 232 A218 218 0 0 1 430 668 Z" fill="#F5922F"/>
+  <!-- face -->
+  <circle cx="528" cy="410" r="27" fill="#161513"/>
+  <path d="M588 412 q22 -34 44 0" fill="none" stroke="#161513" stroke-width="24" stroke-linecap="round"/>
+  <path d="M520 500 q56 56 112 0" fill="none" stroke="#161513" stroke-width="26" stroke-linecap="round"/>
+  <!-- pink spark -->
+  <g transform="translate(778 268)" fill="#F5A8D0">
+    <rect x="-22" y="-92" width="44" height="184" rx="22"/>
+    <rect x="-22" y="-92" width="44" height="184" rx="22" transform="rotate(60)"/>
+    <rect x="-22" y="-92" width="44" height="184" rx="22" transform="rotate(-60)"/>
+  </g>
+  <!-- small lime dot: the pulse -->
+  <circle cx="760" cy="760" r="46" fill="#D4F46A"/>
+</svg>
