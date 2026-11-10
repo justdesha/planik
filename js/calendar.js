@@ -6,6 +6,7 @@ import { menu } from './ui.js';
 import { eventRow, bindEventRows, openEvent, openEventForm, timeLabel, evIcon } from './events.js';
 import { openInbox } from './notify.js';
 import { greetingLine, dayMood } from './pulse.js';
+import { freshStory, openStory, periodById } from './stories.js';
 
 const VIEWS = [
   { value: 'grid', label: 'Календар', icon: 'grid' },
@@ -76,6 +77,7 @@ function onClick(e) {
     });
   } else if (a === 'bell') openInbox(render);
   else if (a === 'alert') openEvent(b.dataset.id, b.dataset.date, render);
+  else if (a === 'story') openStory(periodById(b.dataset.id), render);
   else if (a === 'add') openEventForm({ date: b.dataset.d, onSaved: render });
   else if (a === 'more') {
     const last = feedMonths[feedMonths.length - 1];
@@ -102,10 +104,19 @@ export function render() {
       <button class="ibtn pink" data-a="bell" aria-label="Сповіщення">${ui('bell')}${unread ? `<span class="badge-count">${unread > 9 ? '9+' : unread}</span>` : ''}</button>
     </header>
     ${imp ? alertHtml(imp) : ''}
+    ${storyCard()}
     <div id="homeBody"></div>`;
   const body = root.querySelector('#homeBody');
   if (view === 'grid') renderGrid(body);
   else renderFeed(body, view);
+}
+
+function storyCard() {
+  const p = freshStory();
+  if (!p) return '';
+  const n = occurrences(p.from, p.to).length;
+  return `<button class="story-card" data-a="story" data-id="${p.id}"><span class="sx-ring-b"><span class="sx-face"><b>${n}</b></span></span>
+    <span><b>${p.kind === 'week' ? 'Підсумок тижня готовий' : `Твій ${MONTHS[p.month].toLowerCase()} у сторіз`}</b><span class="t">Скільки всього вмістилось — і квіз наостанок</span></span></button>`;
 }
 
 function alertHtml({ ev, date }) {
@@ -131,7 +142,7 @@ function renderGrid(body) {
 
   let html = `<div class="month-head"><h2 class="hero">${MONTHS[m]}</h2></div><div class="month-sub"><span class="year">${y}</span>
     <div class="month-tools">
-      ${isCurMonth ? '' : `<button class="ibtn sm" data-a="today" aria-label="До сьогодні" style="background:var(--lime)">${ui('calendar')}</button>`}
+      ${isCurMonth ? '' : `<button class="ibtn sm lime" data-a="today" aria-label="До сьогодні">${ui('calendar')}</button>`}
       <button class="ibtn sm" data-a="prev" aria-label="Попередній місяць">${ui('left')}</button>
       <button class="ibtn sm" data-a="next" aria-label="Наступний місяць">${ui('right')}</button></div></div>
     <div class="cal ${selected ? 'collapsed' : ''}"><div class="cal-wd">${WD_SHORT.map((d) => `<span>${d}</span>`).join('')}</div>`;
@@ -155,7 +166,7 @@ function renderGrid(body) {
     const d = parseYmd(selected);
     const list = eventsOn(selected);
     html += `<section class="agenda reveal"><div class="agenda-head"><div><h3 class="h2">${WEEKDAYS[wd(d)]}, ${d.getDate()}</h3><p>${MONTHS_GEN[d.getMonth()]} · ${list.length ? `${list.length} ${list.length === 1 ? 'план' : list.length < 5 ? 'плани' : 'планів'}` : 'нічого не заплановано'}</p></div>
-      <div style="display:flex;gap:8px"><button class="ibtn sm" data-a="add" data-d="${selected}" aria-label="Додати на цей день" style="background:var(--lime)">${ui('plus')}</button>
+      <div style="display:flex;gap:8px"><button class="ibtn sm lime" data-a="add" data-d="${selected}" aria-label="Додати на цей день">${ui('plus')}</button>
       <button class="ibtn sm" data-a="expand" aria-label="Показати весь місяць">${ui('up')}</button></div></div>
       ${list.length ? `<div class="ev-list">${list.map((o) => eventRow(o)).join('')}</div>`
         : `<div class="empty"><p class="h3">Вільний день</p><p class="small">Можна залишити так. Або запланувати щось приємне.</p><button class="btn btn-ink btn-sm" data-a="add" data-d="${selected}">${ui('plus')}Додати план</button></div>`}

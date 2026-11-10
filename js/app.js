@@ -10,6 +10,7 @@ import { runOnboarding } from './onboarding.js';
 import { openEventForm, openEvent } from './events.js';
 import { tick } from './notify.js';
 import { closeAllSheets } from './ui.js';
+import { applyTheme } from './profile.js';
 
 const TABS = [
   { id: 'home', label: 'Календар', icon: 'calendar', render: () => renderHome() },
@@ -124,6 +125,7 @@ function showUpdate(worker) {
 }
 
 function start() {
+  applyTheme();
   shell();
   const st = getState();
   refresh();

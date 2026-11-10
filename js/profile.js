@@ -2,10 +2,19 @@
 import { esc, inWords, uid, haptic } from './util.js';
 import { getState, update, REMIND_CHOICES, exportState, importState, resetAll, PALETTE } from './store.js';
 import { ui, sticker, STICKER_ORDER } from './icons.js';
-import { openSheet, ask, toast, toggle } from './ui.js';
+import { openSheet, ask, toast, toggle, segIndicator } from './ui.js';
 import { askPermission, notifState, isStandalone, updateBadge } from './notify.js';
 
-export const VERSION = '1.0.1';
+export const VERSION = '1.1.0';
+
+/** resolve "auto" against the phone setting and paint the theme */
+export function applyTheme() {
+  const pref = getState().settings.theme || 'auto';
+  const dark = pref === 'dark' || (pref === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', dark ? '#131210' : '#F3EEE3'));
+}
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme());
 
 /** reminder preferences block (used here and in onboarding) */
 export function remindersHtml() {
@@ -37,24 +46,33 @@ export function bindReminders(container, after) {
 /** resize a picked photo to a small square data URL */
 export function pickPhoto() {
   return new Promise((resolve) => {
+    // iOS only fires "change" for a file input that lives in the page,
+    // so the input is attached (invisibly) and removed afterwards.
     const inp = document.createElement('input');
     inp.type = 'file'; inp.accept = 'image/*';
-    inp.onchange = () => {
+    inp.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+    document.body.append(inp);
+    const done = (v) => { inp.remove(); resolve(v); };
+    inp.addEventListener('change', () => {
       const f = inp.files && inp.files[0];
-      if (!f) return resolve(null);
-      const img = new Image();
-      img.onload = () => {
-        const s = 320, c = document.createElement('canvas');
-        c.width = c.height = s;
-        const k = Math.max(s / img.width, s / img.height);
-        const w = img.width * k, h = img.height * k;
-        c.getContext('2d').drawImage(img, (s - w) / 2, (s - h) / 2, w, h);
-        URL.revokeObjectURL(img.src);
-        resolve(c.toDataURL('image/jpeg', .82));
+      if (!f) return done(null);
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const s = 320, c = document.createElement('canvas');
+          c.width = c.height = s;
+          const k = Math.max(s / img.naturalWidth, s / img.naturalHeight);
+          const w = img.naturalWidth * k, h = img.naturalHeight * k;
+          c.getContext('2d').drawImage(img, (s - w) / 2, (s - h) / 2, w, h);
+          done(c.toDataURL('image/jpeg', .82));
+        };
+        img.onerror = () => { toast('Це фото не вдалося відкрити. Спробуй інше'); done(null); };
+        img.src = reader.result;
       };
-      img.onerror = () => resolve(null);
-      img.src = URL.createObjectURL(f);
-    };
+      reader.onerror = () => done(null);
+      reader.readAsDataURL(f);
+    }, { once: true });
     inp.click();
   });
 }
@@ -64,6 +82,14 @@ export function mountProfile(el, { restartOnboarding }) {
   root = el;
   bindReminders(root);
   root.addEventListener('click', async (e) => {
+    const th = e.target.closest('[data-theme-set]');
+    if (th) {
+      update((s) => { s.settings.theme = th.dataset.themeSet; });
+      applyTheme(); haptic();
+      root.querySelectorAll('[data-theme-set]').forEach((x) => x.setAttribute('aria-pressed', x === th));
+      segIndicator(root.querySelector('#themeSeg'));
+      return;
+    }
     const b = e.target.closest('[data-pr], [data-tgl]');
     if (!b) return;
     const a = b.dataset.pr || 'tgl:' + b.dataset.tgl;
@@ -125,6 +151,9 @@ export function renderProfile() {
       <input class="inp" id="pName" value="${esc(st.user.name)}" placeholder="Твоє імʼя" style="text-align:center;max-width:260px;font-family:var(--display);font-weight:900;font-size:20px">
     </div>
 
+    <section class="set-group"><h2 class="h3">Оформлення</h2>
+      <div class="seg" id="themeSeg">${[['auto', 'Авто'], ['light', 'Світла'], ['dark', 'Темна']].map(([k, l]) => `<button type="button" data-theme-set="${k}" aria-pressed="${(st.settings.theme || 'auto') === k}">${l}</button>`).join('')}</div></section>
+
     <section class="set-group"><h2 class="h3">Нагадування</h2><p>За скільки часу попереджати. Для кожної події можна змінити окремо.</p>
       <div class="set">${remindersHtml()}</div></section>
 
@@ -136,7 +165,7 @@ export function renderProfile() {
 
     <section class="set-group"><h2 class="h3">Категорії</h2>
       <div class="set" style="padding:14px 16px"><div class="chips">${st.categories.map((c) => `<span class="chip"><span class="sb sm c-${c.color}" style="width:24px;height:24px">${sticker(c.icon)}</span>${esc(c.name)}</span>`).join('')}
-        <button class="chip" data-pr="cat" style="background:var(--lime)">${ui('plus')}Своя категорія</button></div></div></section>
+        <button class="chip" data-pr="cat" style="background:var(--lime);color:var(--on-color)">${ui('plus')}Своя категорія</button></div></div></section>
 
     <section class="set-group"><h2 class="h3">Дані</h2><p>Усе зберігається тільки на цьому телефоні. Роби копію час від часу.</p>
       <div class="set">
@@ -146,6 +175,7 @@ export function renderProfile() {
         <button class="set-row danger" data-pr="reset">${ui('trash')}<span class="grow">Видалити всі дані</span></button>
       </div></section>
     <p class="tiny muted" style="text-align:center">Planik ${VERSION}</p>`;
+  requestAnimationFrame(() => segIndicator(root.querySelector('#themeSeg')));
 }
 
 function openCategoryForm() {
@@ -153,8 +183,8 @@ function openCategoryForm() {
   const c = { id: uid(), name: '', color: 'lilac', icon: 'star' };
   const body = () => `
     <div class="field"><span class="lbl">Назва</span><input class="inp" id="cName" maxlength="24" placeholder="Напр. Подорожі" value="${esc(c.name)}"></div>
-    <div class="field"><span class="lbl">Колір</span><div class="colors">${colors.map((k) => `<button type="button" class="swatch" data-col="${k}" aria-pressed="${c.color === k}" style="background:var(--${k === 'sand' ? 'sand-2' : k})"></button>`).join('')}</div></div>
-    <div class="field"><span class="lbl">Іконка</span><div class="st-row">${STICKER_ORDER.map((s) => `<button type="button" class="st-pick c-${s === c.icon ? c.color : 'sand'}" data-ic="${s}" aria-pressed="${s === c.icon}" style="${s === c.icon ? `--cut:var(--${c.color === 'sand' ? 'sand-2' : c.color});background:var(--cut)` : ''}">${sticker(s)}</button>`).join('')}</div></div>`;
+    <div class="field"><span class="lbl">Колір</span><div class="colors">${colors.map((k) => `<button type="button" class="swatch" data-col="${k}" aria-pressed="${c.color === k}" style="background:var(--${k})"></button>`).join('')}</div></div>
+    <div class="field"><span class="lbl">Іконка</span><div class="st-row">${STICKER_ORDER.map((s) => `<button type="button" class="st-pick c-${s === c.icon ? c.color : 'sand'}" data-ic="${s}" aria-pressed="${s === c.icon}" style="${s === c.icon ? `--cut:var(--${c.color});background:var(--cut)` : ''}">${sticker(s)}</button>`).join('')}</div></div>`;
   openSheet({
     title: 'Своя категорія', full: true, html: body(),
     foot: '<button class="btn btn-lime btn-block" id="cSave">Додати категорію</button>',

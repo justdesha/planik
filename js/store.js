@@ -5,10 +5,10 @@ const KEY = 'planik:v1';
 
 export const PALETTE = {
   lime: '#D4F46A', forest: '#0F4A37', orange: '#F5922F', pink: '#F5A8D0',
-  ink: '#161513', red: '#EE4B3B', mustard: '#F2C94C', lilac: '#B6A4F2', sand: '#CFC6B3'
+  ink: '#161513', red: '#EE4B3B', mustard: '#F2C94C', lilac: '#B6A4F2', stone: '#C9BFAB'
 };
 /** Text color that reads on top of each palette color */
-export const ON = { lime: '#161513', forest: '#F3EEE3', orange: '#161513', pink: '#161513', ink: '#F3EEE3', red: '#FFF6EE', mustard: '#161513', lilac: '#161513', sand: '#161513' };
+export const ON = { lime: '#161513', forest: '#F3EEE3', orange: '#161513', pink: '#161513', ink: '#F3EEE3', red: '#FFF6EE', mustard: '#161513', lilac: '#161513', stone: '#161513' };
 
 export const DEFAULT_CATEGORIES = [
   { id: 'work', name: 'Робота', color: 'forest', icon: 'briefcase' },
@@ -18,7 +18,7 @@ export const DEFAULT_CATEGORIES = [
   { id: 'study', name: 'Навчання', color: 'lilac', icon: 'book' },
   { id: 'buy', name: 'Покупки', color: 'mustard', icon: 'cart' },
   { id: 'meet', name: 'Зустрічі', color: 'ink', icon: 'chat' },
-  { id: 'other', name: 'Інше', color: 'sand', icon: 'spark' }
+  { id: 'other', name: 'Інше', color: 'stone', icon: 'spark' }
 ];
 
 export const BIRTHDAY_COLOR = 'red';
@@ -38,6 +38,7 @@ function defaults() {
       remind: { birthday: [10080, 1440], important: [1440, 60], normal: [15] },
       badge: true,
       view: 'grid',
+      theme: 'auto',
       importantHorizon: 14
     },
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
@@ -46,7 +47,8 @@ function defaults() {
       { id: uid(), name: 'Не їм солодке', icon: 'candy', color: 'pink', mode: 'without', unit: 'days', goal: 30, start: t, end: '', auto: true, log: [], relapses: [], pinned: true, created: Date.now() },
       { id: uid(), name: 'Сходив у зал', icon: 'dumbbell', color: 'lime', mode: 'with', unit: 'times', goal: 12, start: t, end: '', auto: false, log: [], relapses: [], pinned: false, created: Date.now() + 1 }
     ],
-    inbox: { read: {} }
+    inbox: { read: {} },
+    stories: { seen: {} }
   };
 }
 
@@ -60,12 +62,16 @@ function load() {
     const s = JSON.parse(raw);
     const d = defaults();
     // shallow migration: fill anything new
-    return {
+    const out = {
       ...d, ...s,
       user: { ...d.user, ...s.user },
       settings: { ...d.settings, ...s.settings, remind: { ...d.settings.remind, ...(s.settings || {}).remind } },
-      inbox: { ...d.inbox, ...s.inbox }
+      inbox: { ...d.inbox, ...s.inbox },
+      stories: { ...d.stories, ...s.stories }
     };
+    // 1.1: the "sand" category color became "stone"
+    for (const c of out.categories || []) if (c.color === 'sand') c.color = 'stone';
+    return out;
   } catch (e) {
     return defaults();
   }
@@ -160,6 +166,12 @@ export function toggleDone(id, date) {
     ev.doneDates = ev.doneDates || [];
     const i = ev.doneDates.indexOf(date);
     if (i >= 0) ev.doneDates.splice(i, 1); else ev.doneDates.push(date);
+    // a task planned from a checklist item ticks that item too
+    if (ev.link) {
+      const parent = s.events.find((e) => e.id === ev.link.ev);
+      const item = parent && (parent.checklist || []).find((c) => c.id === ev.link.item);
+      if (item) item.done = i < 0;
+    }
   });
 }
 
@@ -203,10 +215,7 @@ export function nextImportant() {
 
 /* ---------- trackers ---------- */
 export function trackerCount(t) {
-  if (t.mode === 'without' && t.auto) {
-    const from = t.relapses && t.relapses.length ? t.relapses[t.relapses.length - 1] : t.start;
-    return Math.max(0, diffDays(parseYmd(from), new Date()));
-  }
+  if (t.mode === 'without' && t.auto) return Math.max(0, diffDays(parseYmd(trackerFrom(t)), new Date()));
   return t.log.length;
 }
 export function trackerStreak(t) {
@@ -218,6 +227,15 @@ export function trackerStreak(t) {
   return n;
 }
 export const trackerDoneToday = (t) => t.log.includes(todayYmd());
+
+/** for auto-counted trackers: the date the current run started */
+export const trackerFrom = (t) => (t.relapses && t.relapses.length ? t.relapses[t.relapses.length - 1] : t.start);
+/** set how many days the current run already lasts (moves its start date) */
+export function setTrackerDays(t, n) {
+  const from = ymd(addDays(new Date(), -Math.max(0, n)));
+  if (t.relapses && t.relapses.length) t.relapses[t.relapses.length - 1] = from;
+  else t.start = from;
+}
 
 /* ---------- inbox / notifications ---------- */
 export function inboxItems(now = new Date()) {

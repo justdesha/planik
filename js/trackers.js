@@ -1,6 +1,6 @@
 // Habit trackers: grid of tiles, quick +/−, details, builder.
 import { esc, uid, todayYmd, ymd, addDays, parseYmd, pDays, pTimes, plural, WD_SHORT, wd, haptic, humanDate } from './util.js';
-import { getState, update, trackerCount, trackerStreak, trackerDoneToday } from './store.js';
+import { getState, update, trackerCount, trackerStreak, trackerDoneToday, trackerFrom, setTrackerDays } from './store.js';
 import { ui, sticker, STICKER_ORDER } from './icons.js';
 import { openSheet, ask, toast, segIndicator, toggle } from './ui.js';
 
@@ -40,7 +40,7 @@ export function tileHtml(t, { preview = false } = {}) {
     <div><div class="trk-num"><span data-num>${n}</span><small>${subtitle(t, n)}</small></div></div>
     ${t.goal ? `<div><div class="bar"><i style="width:${pct}%"></i></div><div class="trk-goal" style="margin-top:6px"><span>${hit ? 'Мета досягнута' : 'мета'}</span><span>${n} / ${t.goal}</span></div></div>` : ''}
     <div class="trk-act">${autoDays
-      ? `<button data-slip="${t.id}" aria-label="Зрив: почати рахунок заново">${ui('undo')}Зрив</button>`
+      ? `<button data-adj="-1" data-id="${t.id}" aria-label="Мінус день">${ui('minus')}</button><button class="slip" data-slip="${t.id}" aria-label="Зрив: почати рахунок заново">${ui('undo')}</button><button class="plus" data-adj="1" data-id="${t.id}" aria-label="Плюс день">${ui('plus')}</button>`
       : `<button data-minus="${t.id}" aria-label="Мінус один">${ui('minus')}</button><button class="plus ${doneToday ? 'done' : ''}" data-plus="${t.id}" aria-label="${t.unit === 'days' ? 'Відмітити сьогодні' : 'Плюс один'}">${doneToday ? ui('check') : ui('plus')}</button>`}</div>
   </article>`;
 }
@@ -50,7 +50,7 @@ export function renderTrackers() {
   const list = sorted();
   root.innerHTML = `
     <header class="page-head"><div><h1 class="hero">Трекери</h1><p>Маленькі кроки, які видно</p></div>
-      <button class="ibtn" data-new style="background:var(--lime)" aria-label="Створити трекер">${ui('plus')}</button></header>
+      <button class="ibtn lime" data-new aria-label="Створити трекер">${ui('plus')}</button></header>
     <div class="trk-grid">${list.map((t) => tileHtml(t)).join('')}
       <button class="trk trk-new" data-new><span class="ibtn">${ui('plus')}</span><b>Створити трекер</b><span class="small">Звичка, від якої тікаєш, або та, яку будуєш</span></button>
     </div>`;
@@ -71,6 +71,7 @@ function onClick(e) {
   if (b.dataset.plus) { e.stopPropagation(); return plus(b.dataset.plus); }
   if (b.dataset.minus) { e.stopPropagation(); return minus(b.dataset.minus); }
   if (b.dataset.slip) { e.stopPropagation(); return slip(b.dataset.slip); }
+  if (b.dataset.adj) { e.stopPropagation(); return adjust(b.dataset.id, +b.dataset.adj); }
   if (b.dataset.trk) openDetail(b.dataset.trk);
 }
 
@@ -113,6 +114,15 @@ function minus(id) {
   haptic(8);
   afterChange(t, before);
 }
+/** auto-counted trackers: move the start so the streak grows or shrinks by a day */
+function adjust(id, d) {
+  const t = findT(id), before = trackerCount(t);
+  if (d < 0 && before === 0) { toast('Рахунок уже на нулі'); return; }
+  update(() => setTrackerDays(t, before + d));
+  haptic(d > 0 ? 12 : 8);
+  afterChange(t, before);
+}
+
 async function slip(id) {
   const t = findT(id);
   const n = trackerCount(t);
@@ -142,7 +152,10 @@ function openDetail(id) {
       const d = addDays(start, i); const ds = ymd(d);
       const fut = d > today && ds !== todayYmd();
       const on = autoDays ? (ds >= from && ds < todayYmd()) : set.has(ds);
-      cells += `<i class="${fut ? 'fut' : on ? 'on' : ''} ${ds === todayYmd() ? 'today' : ''}" title="${ds}"></i>`;
+      const tap = !autoDays && t.unit === 'days' && !fut;
+      cells += tap
+        ? `<button type="button" class="hd ${on ? 'on' : ''} ${ds === todayYmd() ? 'today' : ''}" data-hd="${ds}" aria-pressed="${on}" aria-label="${d.getDate()}.${d.getMonth() + 1}"></button>`
+        : `<i class="${fut ? 'fut' : on ? 'on' : ''} ${ds === todayYmd() ? 'today' : ''}"></i>`;
     }
     return `
       <div style="display:flex;gap:14px;align-items:center"><span class="sb lg c-${t.color}">${sticker(t.icon)}</span>
@@ -153,7 +166,8 @@ function openDetail(id) {
         <div class="stat"><b>${t.goal || '—'}</b><span>мета</span></div>
       </div>
       <div class="card" style="padding:16px"><div class="card-h" style="margin-bottom:10px"><h3 class="h3">Останні 5 тижнів</h3></div>
-        <div class="heat-wd">${WD_SHORT.map((d) => `<span>${d}</span>`).join('')}</div><div class="heat">${cells}</div></div>
+        <div class="heat-wd">${WD_SHORT.map((d) => `<span>${d}</span>`).join('')}</div><div class="heat">${cells}</div>
+        <p class="tiny muted" style="margin:12px 2px 0">${autoDays ? 'Дні рахуються самі. Якщо тримаєшся довше, ніж показано, додай дні кнопкою «+» на картці або в налаштуваннях трекера.' : t.unit === 'days' ? 'Торкнись дня, щоб відмітити або зняти його — так можна заповнити й минулі дні.' : 'Кожне «+» на картці — один раз.'}</p></div>
       ${t.relapses && t.relapses.length ? `<p class="small muted" style="margin:0 4px 16px">Нових стартів: ${t.relapses.length}. Останній — ${humanDate(t.relapses[t.relapses.length - 1])}.</p>` : ''}
       <div class="det-actions">
         <button class="btn btn-ink" data-d="edit">${ui('edit')}Змінити</button>
@@ -166,6 +180,12 @@ function openDetail(id) {
     html: body(),
     onMount(s) {
       s.body.addEventListener('click', async (e) => {
+        const h = e.target.closest('[data-hd]');
+        if (h) {
+          const ds = h.dataset.hd;
+          update(() => { const i = t.log.indexOf(ds); if (i >= 0) t.log.splice(i, 1); else { t.log.push(ds); t.log.sort(); } });
+          haptic(); s.setHtml(body()); renderTrackers(); return;
+        }
         const b = e.target.closest('[data-d]');
         if (!b) return;
         if (b.dataset.d === 'edit') { s.close(); setTimeout(() => openBuilder(t), 200); }
@@ -217,7 +237,9 @@ export function openBuilder(existing) {
     <div class="field"><span class="lbl">Що рахуємо</span><div class="seg" id="sUnit">
       <button type="button" data-unit="days" aria-pressed="${t.unit === 'days'}">Дні</button>
       <button type="button" data-unit="times" aria-pressed="${t.unit === 'times'}">Рази</button></div></div>
-    ${t.mode === 'without' && t.unit === 'days' ? `<div class="field"><button type="button" class="opt-card" data-auto><span class="grow"><b>Рахувати дні самостійно</b><span>Кожен день без зриву додається сам. Якщо зірвешся — одна кнопка</span></span>${toggle('auto', t.auto)}</button></div>` : ''}
+    ${t.mode === 'without' && t.unit === 'days' ? `<div class="field"><button type="button" class="opt-card" data-auto><span class="grow"><b>Рахувати дні автоматично</b><span>Кожен день без зриву додається сам. Вимкни, якщо хочеш відмічати дні вручну</span></span>${toggle('auto', t.auto)}</button></div>
+      ${t.auto ? `<div class="field"><span class="lbl">Скільки днів уже тримаєшся</span><div class="two"><input class="inp" id="tSince" inputmode="numeric" maxlength="4" value="${trackerCount(t)}"><span class="small muted" style="align-self:center" id="tSinceTxt">рахунок з ${humanDate(trackerFrom(t))}</span></div>
+        <p class="tiny muted" style="margin:8px 4px 0">Якщо рахунок почався ще до Planik — впиши, скільки днів минуло.</p></div>` : ''}` : ''}
     <div class="field"><span class="lbl">Мета</span><div class="chips">${GOALS[t.unit].map((g) => `<button type="button" class="chip" data-goal="${g}" aria-pressed="${t.goal === g}">${t.unit === 'days' ? pDays(g) : pTimes(g)}</button>`).join('')}
       <button type="button" class="chip" data-goal="0" aria-pressed="${!t.goal}">Без мети</button></div>
       <div style="margin-top:10px"><input class="inp" id="tGoal" inputmode="numeric" placeholder="Або своє число" value="${t.goal && !GOALS[t.unit].includes(t.goal) ? t.goal : ''}"></div></div>
@@ -235,6 +257,8 @@ export function openBuilder(existing) {
         const name = s.body.querySelector('#tName'); if (name) t.name = name.value.trim();
         const g = s.body.querySelector('#tGoal'); if (g && g.value) t.goal = Math.max(1, parseInt(g.value, 10) || 0);
         const en = s.body.querySelector('#tEnd'); if (en) t.end = en.value;
+        const since = s.body.querySelector('#tSince');
+        if (since && since.value !== '') setTrackerDays(t, Math.min(9999, parseInt(since.value, 10) || 0));
       };
       const rerender = () => {
         sync();
@@ -244,7 +268,10 @@ export function openBuilder(existing) {
       };
       requestAnimationFrame(() => s.body.querySelectorAll('.seg').forEach(segIndicator));
       s.body.addEventListener('input', (e) => {
-        if (e.target.id === 'tName' || e.target.id === 'tGoal') { sync(); s.body.querySelector('#pv').innerHTML = tileHtml(t, { preview: true }); }
+        if (['tName', 'tGoal', 'tSince'].includes(e.target.id)) {
+          sync(); s.body.querySelector('#pv').innerHTML = tileHtml(t, { preview: true });
+          const st2 = s.body.querySelector('#tSinceTxt'); if (st2) st2.textContent = `рахунок з ${humanDate(trackerFrom(t))}`;
+        }
       });
       s.body.addEventListener('click', (e) => {
         const b = e.target.closest('button');

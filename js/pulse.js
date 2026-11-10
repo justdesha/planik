@@ -2,7 +2,10 @@
 import { WD_SHORT, MONTHS_GEN, ymd, parseYmd, todayYmd, addDays, wd, esc, diffDays, pDays, plural, haptic } from './util.js';
 import { getState, eventsOn, occurrences, isDone, inboxItems, trackerCount, update, colorOf } from './store.js';
 import { ui, sticker } from './icons.js';
-import { eventRow, bindEventRows, openEvent } from './events.js';
+import { eventRow, bindEventRows, openEvent, openEventForm } from './events.js';
+import { ask } from './ui.js';
+import { bubblesHtml, openStory, periodById } from './stories.js';
+import { humanDate } from './util.js';
 import { selectDate } from './calendar.js';
 
 export function greetingLine() {
@@ -60,6 +63,42 @@ export function mountPulse(el) {
       haptic(); renderPulse();
     }
     if (b.dataset.p === 'open') openEvent(b.dataset.ev, b.dataset.d, renderPulse);
+    if (b.dataset.p === 'plan') planItem(b.dataset.ev, b.dataset.id, b.dataset.d);
+  });
+  root.addEventListener('click', (e) => {
+    const s = e.target.closest('[data-story]');
+    if (s) openStory(periodById(s.dataset.story), renderPulse);
+  });
+}
+
+/** "Купити й підготувати" item → plan a purchase or a preparation task for it */
+async function planItem(evId, itemId, date) {
+  const ev = getState().events.find((x) => x.id === evId);
+  const item = ev && ev.checklist.find((c) => c.id === itemId);
+  if (!item) return;
+  const planned = item.planned && getState().events.find((x) => x.id === item.planned);
+  const choice = await ask(`«${item.text}» для «${ev.title}»`, [
+    ...(planned ? [{ label: 'Відкрити заплановану справу', value: 'open', style: 'lime' }] : []),
+    { label: 'Запланувати покупку', value: 'buy', style: planned ? 'sand' : 'lime' },
+    { label: 'Запланувати підготовку', value: 'prep', style: 'sand' },
+    { label: item.done ? 'Повернути в список' : 'Позначити готовим', value: 'done', style: 'sand' }
+  ]);
+  if (!choice) return;
+  if (choice === 'open') return openEvent(planned.id, planned.date, renderPulse);
+  if (choice === 'done') { update(() => { item.done = !item.done; }); haptic(); return renderPulse(); }
+  // the day before the event, but never in the past
+  const dayBefore = ymd(addDays(parseYmd(date), -1));
+  const when = dayBefore < todayYmd() ? todayYmd() : dayBefore;
+  const verbFirst = /^\S+(ти|ть|тися|тись)(\s|$)/i.test(item.text);
+  const title = choice === 'buy' && !verbFirst ? `Купити ${item.text.charAt(0).toLowerCase() + item.text.slice(1)}` : item.text;
+  openEventForm({
+    preset: {
+      kind: 'task', title, date: when, allDay: true, start: '',
+      cat: choice === 'buy' ? 'buy' : (ev.kind === 'birthday' ? 'personal' : ev.cat),
+      notes: `Для «${ev.title}» · ${humanDate(date)}`,
+      link: { ev: ev.id, item: item.id }
+    },
+    onSaved: (task) => { update(() => { item.planned = task.id; }); renderPulse(); }
   });
 }
 
@@ -86,6 +125,7 @@ export function renderPulse() {
 
   root.innerHTML = `
     <header class="page-head"><div><h1 class="hero">Пульс</h1><p>Що попереду і що варто не прогавити</p></div></header>
+    ${bubblesHtml()}
     <section class="cheer"><h2 class="h2">${esc(h)}</h2><p>${esc(p)}</p><span class="halves" aria-hidden="true"><i></i><i></i></span></section>
 
     <section class="card"><div class="card-h"><h3 class="h3">Наступні 7 днів</h3><span class="small muted">${counts.reduce((a, b) => a + b, 0)} ${plural(counts.reduce((a, b) => a + b, 0), 'план', 'плани', 'планів')}</span></div>
@@ -108,7 +148,12 @@ export function renderPulse() {
 
     <section class="card"><div class="card-h"><h3 class="h3">Купити й підготувати</h3><span class="small muted">на 30 днів</span></div>
       ${buy.length ? buy.map(({ ev, date }) => `<div class="buy-group"><span>${esc(ev.title)} · ${parseYmd(date).getDate()} ${MONTHS_GEN[parseYmd(date).getMonth()]}</span>
-        ${ev.checklist.map((c) => `<button class="cl-item ${c.done ? 'on' : ''}" data-p="buy" data-ev="${ev.id}" data-id="${c.id}"><span class="cl-box">${ui('check')}</span><span class="cl-t">${esc(c.text)}</span></button>`).join('')}</div>`).join('')
+        ${ev.checklist.map((c) => {
+          const task = c.planned && getState().events.find((x) => x.id === c.planned);
+          return `<div class="cl-item ${c.done ? 'on' : ''}"><button class="cl-box" data-p="buy" data-ev="${ev.id}" data-id="${c.id}" aria-label="${c.done ? 'Зняти позначку' : 'Позначити готовим'}">${ui('check')}</button>
+            <button class="cl-t cl-plan" data-p="plan" data-ev="${ev.id}" data-id="${c.id}" data-d="${date}">${esc(c.text)}${task ? `<small>заплановано · ${humanDate(task.date)}</small>` : '<small>торкнись, щоб запланувати</small>'}</button>
+            ${task ? '' : `<span class="cl-cal" aria-hidden="true">${ui('calendar')}</span>`}</div>`;
+        }).join('')}</div>`).join('')
         : '<p class="small muted" style="margin:0">Список порожній. Додавай пункти «що купити» прямо в подію — вони зберуться тут.</p>'}
     </section>`;
 }

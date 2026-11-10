@@ -32,7 +32,7 @@ function describe(it) {
   if (it.type === 'remind') return { icon: 'bolt', color: 'lime', title: it.ev.title, text: `${humanDate(it.date)}${it.ev.start && !it.ev.allDay ? ', ' + it.ev.start : ''} · ${untilText(occTime(it.ev, it.date))}` };
   if (it.type === 'goal') return { icon: 'trophy', color: 'lime', title: `Мета досягнута: ${it.tracker.name}`, text: 'Мету досягнуто. Постав нову або просто порадій.' };
   if (it.type === 'trackerEnd') return { icon: 'target', color: 'pink', title: `Челендж завершено: ${it.tracker.name}`, text: 'Подивись результат у трекерах.' };
-  return { icon: 'spark', color: 'sand', title: 'Planik', text: '' };
+  return { icon: 'spark', color: 'stone', title: 'Planik', text: '' };
 }
 
 export function openInbox(after) {

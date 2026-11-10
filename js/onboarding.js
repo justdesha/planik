@@ -30,7 +30,7 @@ export function runOnboarding(onDone) {
       <div class="ob-tiles">
         <div class="ob-tile" style="background:var(--lime)"><span class="sb c-forest">${sticker('briefcase')}</span>Графік і справи</div>
         <div class="ob-tile" style="background:var(--pink)"><span class="sb c-red">${sticker('gift')}</span>Дні народження</div>
-        <div class="ob-tile" style="background:var(--forest);color:var(--cream)"><span class="sb c-orange">${sticker('cart')}</span>Що купити заздалегідь</div>
+        <div class="ob-tile" style="background:var(--forest);color:var(--paper)"><span class="sb c-orange">${sticker('cart')}</span>Що купити заздалегідь</div>
         <div class="ob-tile" style="background:var(--orange)"><span class="sb c-lime">${sticker('flame')}</span>Звички й трекери</div>
       </div>${installTip}`,
     name: () => `

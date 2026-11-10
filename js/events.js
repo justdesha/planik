@@ -85,7 +85,7 @@ export function openEvent(id, date, rerender) {
     const done = isDone(ev, date);
     const cl = ev.checklist || [];
     return `
-    <div class="det-hero c-${color}" style="background:var(--cut);color:${['forest', 'ink', 'red'].includes(color) ? '#FFF6EE' : 'var(--ink)'}">
+    <div class="det-hero c-${color}" style="background:var(--cut);color:${color === 'ink' ? 'var(--cream)' : ['forest', 'red'].includes(color) ? '#FFF6EE' : 'var(--on-color)'}">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="sb" style="background:rgba(255,255,255,.22);--cut:transparent;color:inherit">${sticker(evIcon(ev))}</span>
         <span class="tag" style="background:rgba(255,255,255,.28);color:inherit">${ev.kind === 'birthday' ? 'День народження' : esc(cat.name)}</span>
@@ -157,13 +157,14 @@ export function openEvent(id, date, rerender) {
 /* ------------------------------------------------------------------ */
 /*  Builder                                                            */
 /* ------------------------------------------------------------------ */
-export function openEventForm({ ev: existing, date, kind, onSaved } = {}) {
+export function openEventForm({ ev: existing, date, kind, preset, onSaved } = {}) {
   const st = getState();
   const isNew = !existing;
   const ev = existing ? JSON.parse(JSON.stringify(existing)) : {
     id: uid(), kind: kind || 'event', title: '', cat: 'personal', date: date || todayYmd(),
     allDay: false, start: nextHalfHour(), end: '', repeat: 'none', until: '', important: false,
-    remind: null, place: '', notes: '', checklist: [], birthYear: '', doneDates: [], created: Date.now()
+    remind: null, place: '', notes: '', checklist: [], birthYear: '', doneDates: [], created: Date.now(),
+    ...(preset || {})
   };
   if (ev.kind === 'birthday') { ev.allDay = true; }
   let customRemind = Array.isArray(ev.remind);
@@ -223,15 +224,18 @@ export function openEventForm({ ev: existing, date, kind, onSaved } = {}) {
 
   openSheet({
     full: true,
-    title: isNew ? 'Новий план' : 'Змінити',
+    title: isNew ? (preset && preset.kind === 'task' ? 'Нова справа' : 'Новий план') : 'Змінити',
     html: body(),
     foot: `<button class="btn btn-lime btn-block" id="fSave">${isNew ? 'Додати в календар' : 'Зберегти зміни'}</button>`,
     onMount(s) {
       const rerender = () => {
         readInputs(s.body);
         const top = s.body.scrollTop;
+        // keep horizontal chip rows (categories, repeats) where the person left them
+        const lefts = [...s.body.querySelectorAll('.chips.scroll')].map((c) => c.scrollLeft);
         s.setHtml(body());
         s.body.scrollTop = top;
+        s.body.querySelectorAll('.chips.scroll').forEach((c, i) => { if (lefts[i] !== undefined) c.scrollLeft = lefts[i]; });
         segIndicator(s.body.querySelector('#kindSeg'));
       };
       requestAnimationFrame(() => segIndicator(s.body.querySelector('#kindSeg')));
