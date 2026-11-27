@@ -1,11 +1,12 @@
 // Planik service worker: keeps the app working offline.
 // Bump VERSION on every release so phones pick up new files.
-const VERSION = 'planik-v1.1.0';
+const VERSION = 'planik-v1.2.0';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/util.js', './js/store.js', './js/icons.js', './js/ui.js',
   './js/calendar.js', './js/events.js', './js/trackers.js', './js/pulse.js',
   './js/profile.js', './js/onboarding.js', './js/notify.js', './js/stories.js',
+  './js/moods.js', './js/moodui.js', './js/money.js', './js/whatsnew.js',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png', './icons/favicon.png',
   './fonts/dela-gothic-one-cyrillic-400-normal.woff2', './fonts/dela-gothic-one-latin-400-normal.woff2',
   './fonts/manrope-cyrillic-500-normal.woff2', './fonts/manrope-latin-500-normal.woff2',

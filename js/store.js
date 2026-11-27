@@ -4,19 +4,22 @@ import { ymd, parseYmd, todayYmd, addDays, daysInMonth, diffDays, atTime, uid } 
 const KEY = 'planik:v1';
 
 export const PALETTE = {
-  lime: '#D4F46A', forest: '#0F4A37', orange: '#F5922F', pink: '#F5A8D0',
-  ink: '#161513', red: '#EE4B3B', mustard: '#F2C94C', lilac: '#B6A4F2', stone: '#C9BFAB'
+  butter: '#F4D58A', cobalt: '#2D4FC5', tangerine: '#F47742', peach: '#F9BE9F',
+  ink: '#161513', red: '#DE3A4E', navy: '#182766', sky: '#B4C5F6', stone: '#CEC7B7'
 };
 /** Text color that reads on top of each palette color */
-export const ON = { lime: '#161513', forest: '#F3EEE3', orange: '#161513', pink: '#161513', ink: '#F3EEE3', red: '#FFF6EE', mustard: '#161513', lilac: '#161513', stone: '#161513' };
+export const ON = { butter: '#161513', cobalt: '#F8F6F1', tangerine: '#161513', peach: '#161513', ink: '#F8F6F1', red: '#FFF6EE', navy: '#F8F6F1', sky: '#161513', stone: '#161513' };
+/** 1.2: palette changed; old color keys map onto the new ones */
+const OLD_COLOR = { lime: 'butter', forest: 'cobalt', orange: 'tangerine', pink: 'peach', mustard: 'navy', lilac: 'sky', sand: 'stone' };
+const fixColor = (c) => OLD_COLOR[c] || c;
 
 export const DEFAULT_CATEGORIES = [
-  { id: 'work', name: 'Робота', color: 'forest', icon: 'briefcase' },
-  { id: 'home', name: 'Дім', color: 'orange', icon: 'house' },
-  { id: 'health', name: 'Здоровʼя', color: 'lime', icon: 'heart' },
-  { id: 'personal', name: 'Особисте', color: 'pink', icon: 'star' },
-  { id: 'study', name: 'Навчання', color: 'lilac', icon: 'book' },
-  { id: 'buy', name: 'Покупки', color: 'mustard', icon: 'cart' },
+  { id: 'work', name: 'Робота', color: 'cobalt', icon: 'briefcase' },
+  { id: 'home', name: 'Дім', color: 'tangerine', icon: 'house' },
+  { id: 'health', name: 'Здоровʼя', color: 'butter', icon: 'heart' },
+  { id: 'personal', name: 'Особисте', color: 'peach', icon: 'star' },
+  { id: 'study', name: 'Навчання', color: 'sky', icon: 'book' },
+  { id: 'buy', name: 'Покупки', color: 'navy', icon: 'cart' },
   { id: 'meet', name: 'Зустрічі', color: 'ink', icon: 'chat' },
   { id: 'other', name: 'Інше', color: 'stone', icon: 'spark' }
 ];
@@ -44,11 +47,14 @@ function defaults() {
     categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
     events: [],
     trackers: [
-      { id: uid(), name: 'Не їм солодке', icon: 'candy', color: 'pink', mode: 'without', unit: 'days', goal: 30, start: t, end: '', auto: true, log: [], relapses: [], pinned: true, created: Date.now() },
-      { id: uid(), name: 'Сходив у зал', icon: 'dumbbell', color: 'lime', mode: 'with', unit: 'times', goal: 12, start: t, end: '', auto: false, log: [], relapses: [], pinned: false, created: Date.now() + 1 }
+      { id: uid(), name: 'Не їм солодке', icon: 'candy', color: 'peach', mode: 'without', unit: 'days', goal: 30, start: t, end: '', auto: true, log: [], relapses: [], pinned: true, created: Date.now() },
+      { id: uid(), name: 'Сходив у зал', icon: 'dumbbell', color: 'butter', mode: 'with', unit: 'times', goal: 12, start: t, end: '', auto: false, log: [], relapses: [], pinned: false, created: Date.now() + 1 }
     ],
     inbox: { read: {} },
-    stories: { seen: {} }
+    stories: { seen: {} },
+    mood: {},
+    money: { cur: '₴', start: null, ops: [], cats: [], limits: {}, recs: [], jars: [] },
+    app: { seen: '' }
   };
 }
 
@@ -67,10 +73,14 @@ function load() {
       user: { ...d.user, ...s.user },
       settings: { ...d.settings, ...s.settings, remind: { ...d.settings.remind, ...(s.settings || {}).remind } },
       inbox: { ...d.inbox, ...s.inbox },
-      stories: { ...d.stories, ...s.stories }
+      stories: { ...d.stories, ...s.stories },
+      mood: { ...(s.mood || {}) },
+      money: { ...d.money, ...(s.money || {}) },
+      app: { ...d.app, ...(s.app || {}) }
     };
-    // 1.1: the "sand" category color became "stone"
-    for (const c of out.categories || []) if (c.color === 'sand') c.color = 'stone';
+    // 1.1 → 1.2: color keys renamed with the new palette
+    for (const c of out.categories || []) c.color = fixColor(c.color);
+    for (const t of out.trackers || []) t.color = fixColor(t.color);
     return out;
   } catch (e) {
     return defaults();
@@ -115,6 +125,7 @@ export function occursOn(ev, d) {
   switch (rep) {
     case 'daily': return true;
     case 'weekdays': { const w = b.getDay(); return w !== 0 && w !== 6; }
+    case 'days': return (ev.days || []).includes((b.getDay() + 6) % 7);
     case 'weekly': return diffDays(a, b) % 7 === 0;
     case 'biweekly': return diffDays(a, b) % 14 === 0;
     case 'monthly': {
@@ -166,6 +177,8 @@ export function toggleDone(id, date) {
     ev.doneDates = ev.doneDates || [];
     const i = ev.doneDates.indexOf(date);
     if (i >= 0) ev.doneDates.splice(i, 1); else ev.doneDates.push(date);
+    // a recurring payment ticked in the calendar becomes an expense in Money
+    if (ev.pay && i < 0) setTimeout(() => window.dispatchEvent(new CustomEvent('planik:paid', { detail: { rec: ev.pay, date } })), 0);
     // a task planned from a checklist item ticks that item too
     if (ev.link) {
       const parent = s.events.find((e) => e.id === ev.link.ev);

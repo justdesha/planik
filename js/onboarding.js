@@ -2,11 +2,11 @@
 import { esc, uid, haptic } from './util.js';
 import { getState, update, saveEvent } from './store.js';
 import { ui, sticker } from './icons.js';
-import { remindersHtml, bindReminders, pickPhoto } from './profile.js';
+import { remindersHtml, bindReminders, pickPhoto, VERSION } from './profile.js';
 import { askPermission, isStandalone, notifState, updateBadge } from './notify.js';
 import { toggle } from './ui.js';
 
-const LOGO = `<svg viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" fill="#0F4A37"/><rect x="282" y="232" width="168" height="580" rx="84" fill="#D4F46A"/><path d="M430 232 A218 218 0 0 1 430 668 Z" fill="#F5922F"/><circle cx="528" cy="410" r="27" fill="#161513"/><path d="M588 412 q22 -34 44 0" fill="none" stroke="#161513" stroke-width="24" stroke-linecap="round"/><path d="M520 500 q56 56 112 0" fill="none" stroke="#161513" stroke-width="26" stroke-linecap="round"/><g transform="translate(778 268)" fill="#F5A8D0"><rect x="-22" y="-92" width="44" height="184" rx="22"/><rect x="-22" y="-92" width="44" height="184" rx="22" transform="rotate(60)"/><rect x="-22" y="-92" width="44" height="184" rx="22" transform="rotate(-60)"/></g><circle cx="760" cy="760" r="46" fill="#D4F46A"/></svg>`;
+import { LOGO } from './whatsnew.js';
 
 export function runOnboarding(onDone) {
   const st = getState();
@@ -20,7 +20,7 @@ export function runOnboarding(onDone) {
 
   const ios = /iP(hone|ad|od)/.test(navigator.userAgent);
   const installTip = ios && !isStandalone()
-    ? `<div class="install-tip"><span class="sb sm c-lime" style="width:36px;height:36px">${sticker('phone')}</span><span>Щоб Planik працював як застосунок, у Safari натисни <b>Поділитися</b> → <b>На початковий екран</b>.</span></div>` : '';
+    ? `<div class="install-tip"><span class="sb sm c-butter" style="width:36px;height:36px">${sticker('phone')}</span><span>Щоб Planik працював як застосунок, у Safari натисни <b>Поділитися</b> → <b>На початковий екран</b>.</span></div>` : '';
 
   const views = {
     welcome: () => `
@@ -28,10 +28,10 @@ export function runOnboarding(onDone) {
       <h1 class="hero">Тримай життя в&nbsp;ритмі</h1>
       <p class="lead">Робота, дім, дні народження близьких і звички — в одному календарі, який нагадує завчасно й підбадьорює.</p>
       <div class="ob-tiles">
-        <div class="ob-tile" style="background:var(--lime)"><span class="sb c-forest">${sticker('briefcase')}</span>Графік і справи</div>
-        <div class="ob-tile" style="background:var(--pink)"><span class="sb c-red">${sticker('gift')}</span>Дні народження</div>
-        <div class="ob-tile" style="background:var(--forest);color:var(--paper)"><span class="sb c-orange">${sticker('cart')}</span>Що купити заздалегідь</div>
-        <div class="ob-tile" style="background:var(--orange)"><span class="sb c-lime">${sticker('flame')}</span>Звички й трекери</div>
+        <div class="ob-tile" style="background:var(--butter)"><span class="sb c-cobalt">${sticker('briefcase')}</span>Графік і справи</div>
+        <div class="ob-tile" style="background:var(--peach)"><span class="sb c-red">${sticker('gift')}</span>Дні народження</div>
+        <div class="ob-tile" style="background:var(--cobalt);color:var(--paper)"><span class="sb c-tangerine">${sticker('cart')}</span>Що купити заздалегідь</div>
+        <div class="ob-tile" style="background:var(--tangerine)"><span class="sb c-butter">${sticker('flame')}</span>Звички й трекери</div>
       </div>${installTip}`,
     name: () => `
       <h1 class="hero">Як тебе звати?</h1>
@@ -57,7 +57,7 @@ export function runOnboarding(onDone) {
       <p class="lead">Planik покаже нагадування і поставить лічильник на іконку, коли щось потребує уваги.</p>
       <div class="set">
         <div class="set-row"><span class="grow">Сповіщення<span>${perm === 'granted' ? 'Увімкнено' : perm === 'denied' ? 'Вимкнено в Параметрах iPhone' : perm === 'unsupported' ? 'Стане доступно після додавання на початковий екран' : 'Потрібен твій дозвіл'}</span></span>
-          ${perm === 'default' ? '<button class="btn btn-lime btn-sm" id="obPerm">Дозволити</button>' : perm === 'granted' ? `<span class="sb sm c-forest">${sticker('star')}</span>` : ''}</div>
+          ${perm === 'default' ? '<button class="btn btn-acc btn-sm" id="obPerm">Дозволити</button>' : perm === 'granted' ? `<span class="sb sm c-cobalt">${sticker('star')}</span>` : ''}</div>
         <button class="set-row" id="obBadge"><span class="grow">Лічильник на іконці<span>Число непрочитаних нагадувань</span></span>${toggle('badge', getState().settings.badge)}</button>
       </div>${installTip}`;
     },
@@ -82,7 +82,7 @@ export function runOnboarding(onDone) {
       <div class="ob-top">${step > 0 && key !== 'done' ? `<button class="ibtn sm" id="obBack" aria-label="Назад">${ui('left')}</button>` : '<span class="ob-word">planik</span>'}
         ${['photo', 'bdays', 'notify'].includes(key) ? '<button class="ob-skip" id="obSkip">Пропустити</button>' : ''}</div>
       <div class="ob-stage"><div class="ob-step ${dir < 0 ? 'back' : ''}">${views[key]()}</div></div>
-      <div class="ob-foot"><button class="btn btn-lime" id="obNext">${key === 'welcome' ? 'Почнімо' : key === 'done' ? 'Відкрити календар' : 'Далі'}${key === 'done' ? '' : ui('right')}</button></div>`;
+      <div class="ob-foot"><button class="btn btn-acc" id="obNext">${key === 'welcome' ? 'Почнімо' : key === 'done' ? 'Відкрити календар' : 'Далі'}${key === 'done' ? '' : ui('right')}</button></div>`;
     if (key === 'name') setTimeout(() => el.querySelector('#obName')?.focus(), 350);
     if (key === 'remind') bindReminders(el.querySelector('#obRem'));
   };
@@ -97,7 +97,7 @@ export function runOnboarding(onDone) {
   };
 
   const finish = () => {
-    update((s) => { s.user.name = draft.name; s.user.photo = draft.photo; s.user.onboarded = true; });
+    update((s) => { s.user.name = draft.name; s.user.photo = draft.photo; s.user.onboarded = true; s.app = { ...(s.app || {}), seen: VERSION }; });
     for (const b of draft.birthdays) {
       if (!b.name || !b.date) continue;
       const [y] = b.date.split('-').map(Number);

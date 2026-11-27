@@ -2,6 +2,8 @@
 import { MONTHS, MONTHS_GEN, WEEKDAYS, ymd, parseYmd, addDays, addMonths, daysInMonth, wd, esc, plural, pDays, haptic, todayYmd } from './util.js';
 import { getState, update, occurrences, isDone, catById, trackerStreak } from './store.js';
 import { ui, sticker } from './icons.js';
+import { moodSlide } from './moodui.js';
+import { moodStats } from './moods.js';
 
 const SLIDE_MS = 6500;
 
@@ -28,11 +30,18 @@ const prevOf = (p) => (p.kind === 'week' ? weekPeriod(p.offset - 1) : monthPerio
 const nextOf = (p) => (p.kind === 'week' ? weekPeriod(p.offset + 1) : monthPeriod(p.offset + 1));
 
 /** bubbles shown on Pulse: this week, past weeks with plans, this month, past months with plans */
+/** a period has something to tell: plans, moods (and later money) */
+const hasData = (p) => occurrences(p.from, p.to).length > 0 || moodStats(p.from, p.to).n > 0 || extraData(p);
+let extraData = () => false;
+export const setExtraData = (fn) => { extraData = fn; };
+let extraSlides = () => [];
+export const setExtraSlides = (fn) => { extraSlides = fn; };
+
 export function storyPeriods() {
   const list = [weekPeriod(0)];
-  for (let i = -1; i >= -4; i--) { const p = weekPeriod(i); if (occurrences(p.from, p.to).length) list.push(p); }
+  for (let i = -1; i >= -4; i--) { const p = weekPeriod(i); if (hasData(p)) list.push(p); }
   list.push(monthPeriod(0));
-  for (let i = -1; i >= -3; i--) { const p = monthPeriod(i); if (occurrences(p.from, p.to).length) list.push(p); }
+  for (let i = -1; i >= -3; i--) { const p = monthPeriod(i); if (hasData(p)) list.push(p); }
   return list;
 }
 
@@ -41,9 +50,9 @@ export function freshStory() {
   const seen = getState().stories.seen;
   const now = new Date();
   const lastWeek = weekPeriod(-1);
-  if (wd(now) <= 2 && !seen[lastWeek.id] && occurrences(lastWeek.from, lastWeek.to).length) return lastWeek;
+  if (wd(now) <= 2 && !seen[lastWeek.id] && hasData(lastWeek)) return lastWeek;
   const lastMonth = monthPeriod(-1);
-  if (now.getDate() <= 7 && !seen[lastMonth.id] && occurrences(lastMonth.from, lastMonth.to).length) return lastMonth;
+  if (now.getDate() <= 7 && !seen[lastMonth.id] && hasData(lastMonth)) return lastMonth;
   return null;
 }
 
@@ -98,23 +107,26 @@ function buildSlides(p, s) {
   const range = `${parseYmd(p.from).getDate()} ${MONTHS_GEN[parseYmd(p.from).getMonth()]} – ${parseYmd(p.to).getDate()} ${MONTHS_GEN[parseYmd(p.to).getMonth()]}`;
   const slides = [];
 
-  slides.push({ bg: 'forest', html: `
+  slides.push({ bg: 'cobalt', html: `
     <div class="sx-top"><span class="sx-word">planik</span></div>
-    <div class="sx-mid"><p class="sx-kicker">${p.current ? 'поки що' : 'підсумок'}</p><h2 class="sx-hero" style="color:var(--lime)">${esc(your)}</h2><p class="sx-text">${range}</p></div>
+    <div class="sx-mid"><p class="sx-kicker">${p.current ? 'поки що' : 'підсумок'}</p><h2 class="sx-hero" style="color:var(--butter)">${esc(your)}</h2><p class="sx-text">${range}</p></div>
     <span class="sx-halves" aria-hidden="true"><i></i><i></i></span>` });
 
   if (!s.total) {
-    slides.push({ bg: 'pink', html: `<div class="sx-mid"><h2 class="sx-hero">${p.current ? 'Поки порожньо' : `Тихий ${unit}`}</h2><p class="sx-text">${p.current ? 'Додай кілька планів — і тут зʼявиться твоя статистика.' : 'Без планів у календарі. Іноді саме це й потрібно.'}</p></div>` });
+    slides.push({ bg: 'peach', html: `<div class="sx-mid"><h2 class="sx-hero">${p.current ? 'Поки порожньо' : `Тихий ${unit}`}</h2><p class="sx-text">${p.current ? 'Додай кілька планів — і тут зʼявиться твоя статистика.' : 'Без планів у календарі. Іноді саме це й потрібно.'}</p></div>` });
+    const ms0 = moodSlide(p);
+    if (ms0) slides.push(ms0);
+    slides.push(...extraSlides(p));
     return slides;
   }
 
   const diff = s.total - s.prevTotal;
   const cmp = !s.prevTotal ? '' : diff > 0 ? `на ${diff} більше, ніж ${p.kind === 'week' ? 'тижнем раніше' : 'місяцем раніше'}` : diff < 0 ? `на ${-diff} менше, ніж ${p.kind === 'week' ? 'тижнем раніше' : 'місяцем раніше'}` : `стільки ж, як ${p.kind === 'week' ? 'тижнем раніше' : 'місяцем раніше'}`;
-  slides.push({ bg: 'lime', html: `
+  slides.push({ bg: 'butter', html: `
     <div class="sx-mid"><p class="sx-kicker">${p.current ? 'у календарі цього ' + (p.kind === 'week' ? 'тижня' : 'місяця') : 'за цей ' + unit}</p>
       <div class="sx-num">${s.total}</div><p class="sx-big">${countWord(s.total)}</p>
       <p class="sx-pill">${levelWord(p, s.total)} ${unit}</p>${cmp ? `<p class="sx-text">${cmp}</p>` : ''}</div>
-    <span class="sx-st" style="--cut:var(--forest)">${sticker('bolt')}</span>` });
+    <span class="sx-st" style="--cut:var(--cobalt)">${sticker('bolt')}</span>` });
 
   // quiz
   if (s.cats.length >= 2) {
@@ -124,7 +136,7 @@ function buildSlides(p, s) {
     while (pool.length < 3 && others.length) pool.push(others.splice(Math.floor(Math.random() * others.length), 1)[0]);
     const opts = [right.key, ...pool].sort(() => Math.random() - .5).map((k) => ({ key: k, ...groupInfo(k), n: (s.cats.find((c) => c.key === k) || { n: 0 }).n }));
     const tie = s.cats[1].n === right.n;
-    slides.push({ bg: 'pink', quiz: { right: right.key, tie, top: right.n }, html: `
+    slides.push({ bg: 'peach', quiz: { right: right.key, tie, top: right.n }, html: `
       <div class="sx-mid"><p class="sx-kicker">квіз</p><h2 class="sx-q">Як гадаєш, чого в тебе було найбільше ${p.kind === 'week' ? 'цього тижня' : 'цього місяця'}?</h2>
       <div class="sx-opts">${opts.map((o) => `<button class="sx-opt" data-q="${o.key}" data-n="${o.n}"><span class="sb sm c-${o.color}">${sticker(o.icon)}</span><span class="grow">${esc(o.name)}</span><span class="sx-cnt"></span></button>`).join('')}</div>
       <p class="sx-text sx-verdict" aria-live="polite"></p></div>` });
@@ -138,11 +150,16 @@ function buildSlides(p, s) {
 
   // days
   const bd = parseYmd(s.busiest.d);
-  slides.push({ bg: 'orange', html: `
+  slides.push({ bg: 'tangerine', html: `
     <div class="sx-mid"><p class="sx-kicker">найнасиченіший день</p><h2 class="sx-hero">${WEEKDAYS[wd(bd)]}</h2>
       <p class="sx-big">${bd.getDate()} ${MONTHS_GEN[bd.getMonth()]} · ${s.busiest.n} ${countWord(s.busiest.n)}</p>
       <p class="sx-text">${s.free ? `А ще ${pDays(s.free)} без жодних планів. ${s.free >= p.days / 2 ? 'Простір для себе — теж добре.' : 'Бережи ці паузи.'}` : `Жодного вільного дня. Наступного ${p.kind === 'week' ? 'тижня' : 'місяця'} заплануй собі відпочинок.`}</p></div>
     <span class="sx-st" style="--cut:#161513">${sticker('flame')}</span>` });
+
+  // mood & money
+  const ms = moodSlide(p);
+  if (ms) slides.push(ms);
+  slides.push(...extraSlides(p));
 
   // tasks & trackers
   if (s.tasks || (s.best && s.best.n)) {
@@ -158,9 +175,9 @@ function buildSlides(p, s) {
   const lines = s.total / p.days >= 1.6
     ? ['Ти тримаєш темп', 'Між справами не забувай про сон, їжу й людей поруч.']
     : ['Хороший ритм', 'Є місце і для справ, і для себе. Так тримати.'];
-  slides.push({ bg: 'forest', html: `
-    <div class="sx-mid"><h2 class="sx-hero" style="color:var(--lime)">${lines[0]}</h2><p class="sx-text">${lines[1]}</p>
-      <p class="sx-pill" style="background:var(--lime);color:var(--on-color)">${p.current ? 'Попереду ще' : (p.kind === 'week' ? 'Наступного тижня' : 'Наступного місяця')}: ${s.nextTotal} ${countWord(s.nextTotal)}</p></div>
+  slides.push({ bg: 'cobalt', html: `
+    <div class="sx-mid"><h2 class="sx-hero" style="color:var(--butter)">${lines[0]}</h2><p class="sx-text">${lines[1]}</p>
+      <p class="sx-pill" style="background:var(--butter);color:var(--on-color)">${p.current ? 'Попереду ще' : (p.kind === 'week' ? 'Наступного тижня' : 'Наступного місяця')}: ${s.nextTotal} ${countWord(s.nextTotal)}</p></div>
     <span class="sx-halves" aria-hidden="true"><i></i><i></i></span>` });
   return slides;
 }
@@ -169,12 +186,18 @@ function buildSlides(p, s) {
 export function openStory(p, onClose) {
   const s = stats(p);
   const slides = buildSlides(p, s);
+  update((st) => { st.stories.seen[p.id] = Date.now(); });
+  playDeck(slides, { label: `Підсумок: ${p.label}`, onClose });
+}
+
+/** generic story player: [{bg, html, quiz?}] — used by summaries and "what's new" */
+export function playDeck(slides, { label = '', onClose, onEnd } = {}) {
   let i = 0, t0 = 0, elapsed = 0, paused = false, raf = 0, answered = false;
 
   const el = document.createElement('div');
   el.className = 'sx';
   el.setAttribute('role', 'dialog');
-  el.setAttribute('aria-label', `Підсумок: ${p.label}`);
+  el.setAttribute('aria-label', label);
   el.innerHTML = `
     <div class="sx-bars-top">${slides.map(() => '<i><b></b></i>').join('')}</div>
     <button class="sx-close" aria-label="Закрити">${ui('close')}</button>
@@ -182,7 +205,6 @@ export function openStory(p, onClose) {
     <button class="sx-nav prev" aria-label="Назад"></button><button class="sx-nav next" aria-label="Далі"></button>`;
   document.body.append(el);
   document.body.style.overflow = 'hidden';
-  update((st) => { st.stories.seen[p.id] = Date.now(); });
 
   const bars = [...el.querySelectorAll('.sx-bars-top b')];
   const stage = el.querySelector('.sx-stage');
@@ -195,7 +217,7 @@ export function openStory(p, onClose) {
     bars.forEach((b, k) => { b.style.width = k < i ? '100%' : '0%'; });
     t0 = performance.now();
   };
-  const next = () => { if (i < slides.length - 1) { haptic(); show(i + 1); } else close(); };
+  const next = () => { if (i < slides.length - 1) { haptic(); show(i + 1); } else { onEnd && onEnd(); close(); } };
   const prev = () => { haptic(); show(Math.max(0, i - 1)); };
 
   const loop = (now) => {
@@ -216,7 +238,7 @@ export function openStory(p, onClose) {
 
   // tap left/right; hold anywhere to pause
   let downAt = 0, y0 = 0;
-  el.addEventListener('pointerdown', (e) => { if (e.target.closest('.sx-opt, .sx-close')) return; downAt = Date.now(); y0 = e.clientY; paused = true; });
+  el.addEventListener('pointerdown', (e) => { if (e.target.closest('.sx-opt, .sx-close, [data-sx], .sx-demo')) return; downAt = Date.now(); y0 = e.clientY; paused = true; });
   el.addEventListener('pointerup', (e) => {
     if (!downAt) return;
     paused = false;
@@ -232,6 +254,8 @@ export function openStory(p, onClose) {
   el.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); if (e.key === 'ArrowRight') next(); if (e.key === 'ArrowLeft') prev(); });
 
   stage.addEventListener('click', (e) => {
+    const go = e.target.closest('[data-sx]');
+    if (go) { const a = go.dataset.sx; if (a === 'close') { onEnd && onEnd(); close(); } else if (a === 'next') next(); else if (slides[i].onAction) slides[i].onAction(a, close); return; }
     const o = e.target.closest('.sx-opt');
     if (!o || answered) return;
     const q = slides[i].quiz;

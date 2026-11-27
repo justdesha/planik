@@ -7,6 +7,7 @@ import { eventRow, bindEventRows, openEvent, openEventForm, timeLabel, evIcon } 
 import { openInbox } from './notify.js';
 import { greetingLine, dayMood } from './pulse.js';
 import { freshStory, openStory, periodById } from './stories.js';
+import { checkinHtml, bindCheckin, dayMoodHtml } from './moodui.js';
 
 const VIEWS = [
   { value: 'grid', label: 'Календар', icon: 'grid' },
@@ -25,6 +26,7 @@ function firstOf(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
 export function mountHome(el) {
   root = el;
   bindEventRows(root, render);
+  bindCheckin(root, render);
   root.addEventListener('click', onClick);
   let x0 = null, y0 = null;
   root.addEventListener('touchstart', (e) => {
@@ -76,6 +78,7 @@ function onClick(e) {
       render(); window.scrollTo({ top: 0 });
     });
   } else if (a === 'bell') openInbox(render);
+  else if (a === 'profile') window.dispatchEvent(new CustomEvent('planik:tab', { detail: 'profile' }));
   else if (a === 'alert') openEvent(b.dataset.id, b.dataset.date, render);
   else if (a === 'story') openStory(periodById(b.dataset.id), render);
   else if (a === 'add') openEventForm({ date: b.dataset.d, onSaved: render });
@@ -98,11 +101,12 @@ export function render() {
 
   root.innerHTML = `
     <header class="top">
-      <div class="avatar">${st.user.photo ? `<img src="${st.user.photo}" alt="">` : esc(initial)}</div>
+      <button class="avatar" data-a="profile" aria-label="Профіль">${st.user.photo ? `<img src="${st.user.photo}" alt="">` : esc(initial)}</button>
       <div class="greet"><h1 class="h2">${esc(greetingLine())}, ${esc(name)}</h1><p>${esc(dayMood())}</p></div>
       <button class="ibtn" data-a="view" aria-label="Вигляд місяця">${ui(VIEWS.find((v) => v.value === view).icon)}</button>
-      <button class="ibtn pink" data-a="bell" aria-label="Сповіщення">${ui('bell')}${unread ? `<span class="badge-count">${unread > 9 ? '9+' : unread}</span>` : ''}</button>
+      <button class="ibtn peach" data-a="bell" aria-label="Сповіщення">${ui('bell')}${unread ? `<span class="badge-count">${unread > 9 ? '9+' : unread}</span>` : ''}</button>
     </header>
+    ${checkinHtml()}
     ${imp ? alertHtml(imp) : ''}
     ${storyCard()}
     <div id="homeBody"></div>`;
@@ -142,7 +146,7 @@ function renderGrid(body) {
 
   let html = `<div class="month-head"><h2 class="hero">${MONTHS[m]}</h2></div><div class="month-sub"><span class="year">${y}</span>
     <div class="month-tools">
-      ${isCurMonth ? '' : `<button class="ibtn sm lime" data-a="today" aria-label="До сьогодні">${ui('calendar')}</button>`}
+      ${isCurMonth ? '' : `<button class="ibtn sm acc" data-a="today" aria-label="До сьогодні">${ui('calendar')}</button>`}
       <button class="ibtn sm" data-a="prev" aria-label="Попередній місяць">${ui('left')}</button>
       <button class="ibtn sm" data-a="next" aria-label="Наступний місяць">${ui('right')}</button></div></div>
     <div class="cal ${selected ? 'collapsed' : ''}"><div class="cal-wd">${WD_SHORT.map((d) => `<span>${d}</span>`).join('')}</div>`;
@@ -166,8 +170,9 @@ function renderGrid(body) {
     const d = parseYmd(selected);
     const list = eventsOn(selected);
     html += `<section class="agenda reveal"><div class="agenda-head"><div><h3 class="h2">${WEEKDAYS[wd(d)]}, ${d.getDate()}</h3><p>${MONTHS_GEN[d.getMonth()]} · ${list.length ? `${list.length} ${list.length === 1 ? 'план' : list.length < 5 ? 'плани' : 'планів'}` : 'нічого не заплановано'}</p></div>
-      <div style="display:flex;gap:8px"><button class="ibtn sm lime" data-a="add" data-d="${selected}" aria-label="Додати на цей день">${ui('plus')}</button>
+      <div style="display:flex;gap:8px"><button class="ibtn sm acc" data-a="add" data-d="${selected}" aria-label="Додати на цей день">${ui('plus')}</button>
       <button class="ibtn sm" data-a="expand" aria-label="Показати весь місяць">${ui('up')}</button></div></div>
+      ${dayMoodHtml(selected)}
       ${list.length ? `<div class="ev-list">${list.map((o) => eventRow(o)).join('')}</div>`
         : `<div class="empty"><p class="h3">Вільний день</p><p class="small">Можна залишити так. Або запланувати щось приємне.</p><button class="btn btn-ink btn-sm" data-a="add" data-d="${selected}">${ui('plus')}Додати план</button></div>`}
     </section>`;

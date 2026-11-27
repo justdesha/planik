@@ -4,7 +4,7 @@ import { getState, update, trackerCount, trackerStreak, trackerDoneToday, tracke
 import { ui, sticker, STICKER_ORDER } from './icons.js';
 import { openSheet, ask, toast, segIndicator, toggle } from './ui.js';
 
-const COLORS = ['lime', 'pink', 'orange', 'forest', 'mustard', 'lilac', 'ink'];
+const COLORS = ['butter', 'peach', 'tangerine', 'cobalt', 'navy', 'sky', 'ink'];
 const GOALS = { days: [7, 21, 30, 66, 100], times: [5, 10, 12, 20, 50] };
 
 function unitWord(t, n) {
@@ -50,7 +50,7 @@ export function renderTrackers() {
   const list = sorted();
   root.innerHTML = `
     <header class="page-head"><div><h1 class="hero">Трекери</h1><p>Маленькі кроки, які видно</p></div>
-      <button class="ibtn lime" data-new aria-label="Створити трекер">${ui('plus')}</button></header>
+      <button class="ibtn acc" data-new aria-label="Створити трекер">${ui('plus')}</button></header>
     <div class="trk-grid">${list.map((t) => tileHtml(t)).join('')}
       <button class="trk trk-new" data-new><span class="ibtn">${ui('plus')}</span><b>Створити трекер</b><span class="small">Звичка, від якої тікаєш, або та, яку будуєш</span></button>
     </div>`;
@@ -212,7 +212,7 @@ function openDetail(id) {
 export function openBuilder(existing) {
   const isNew = !existing;
   const t = existing ? JSON.parse(JSON.stringify(existing)) : {
-    id: uid(), name: '', icon: 'flame', color: 'orange', mode: 'with', unit: 'days', goal: 21,
+    id: uid(), name: '', icon: 'flame', color: 'tangerine', mode: 'with', unit: 'days', goal: 21,
     start: todayYmd(), end: '', auto: false, log: [], relapses: [], pinned: false, created: Date.now()
   };
   let moreOpen = false;
@@ -251,7 +251,7 @@ export function openBuilder(existing) {
     full: true,
     title: isNew ? 'Новий трекер' : 'Змінити трекер',
     html: body(),
-    foot: `<button class="btn btn-lime btn-block" id="tSave">${isNew ? 'Створити трекер' : 'Зберегти'}</button>`,
+    foot: `<button class="btn btn-acc btn-block" id="tSave">${isNew ? 'Створити трекер' : 'Зберегти'}</button>`,
     onMount(s) {
       const sync = () => {
         const name = s.body.querySelector('#tName'); if (name) t.name = name.value.trim();

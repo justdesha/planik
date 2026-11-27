@@ -26,12 +26,12 @@ export function updateBadge() {
 }
 
 function describe(it) {
-  if (it.type === 'overdue') return { icon: 'flame', color: 'orange', title: `Не забудь: «${it.ev.title}»`, text: `Мало бути ${humanDate(it.date)}. Зроби або перенеси.` };
+  if (it.type === 'overdue') return { icon: 'flame', color: 'tangerine', title: `Не забудь: «${it.ev.title}»`, text: `Мало бути ${humanDate(it.date)}. Зроби або перенеси.` };
   if (it.type === 'birthday') return { icon: 'gift', color: 'red', title: `День народження: ${it.ev.title}`, text: it.offset === 0 ? 'Сьогодні! Не забудь привітати.' : `${humanDate(it.date)} — є ${inWords(it.offset)}, щоб підготуватися.` };
   if (it.type === 'important') return { icon: 'megaphone', color: 'red', title: `Важливо: ${it.ev.title}`, text: `${humanDate(it.date)}${it.ev.start && !it.ev.allDay ? ', ' + it.ev.start : ''} · ${untilText(occTime(it.ev, it.date))}` };
-  if (it.type === 'remind') return { icon: 'bolt', color: 'lime', title: it.ev.title, text: `${humanDate(it.date)}${it.ev.start && !it.ev.allDay ? ', ' + it.ev.start : ''} · ${untilText(occTime(it.ev, it.date))}` };
-  if (it.type === 'goal') return { icon: 'trophy', color: 'lime', title: `Мета досягнута: ${it.tracker.name}`, text: 'Мету досягнуто. Постав нову або просто порадій.' };
-  if (it.type === 'trackerEnd') return { icon: 'target', color: 'pink', title: `Челендж завершено: ${it.tracker.name}`, text: 'Подивись результат у трекерах.' };
+  if (it.type === 'remind') return { icon: 'bolt', color: 'butter', title: it.ev.title, text: `${humanDate(it.date)}${it.ev.start && !it.ev.allDay ? ', ' + it.ev.start : ''} · ${untilText(occTime(it.ev, it.date))}` };
+  if (it.type === 'goal') return { icon: 'trophy', color: 'butter', title: `Мета досягнута: ${it.tracker.name}`, text: 'Мету досягнуто. Постав нову або просто порадій.' };
+  if (it.type === 'trackerEnd') return { icon: 'target', color: 'peach', title: `Челендж завершено: ${it.tracker.name}`, text: 'Подивись результат у трекерах.' };
   return { icon: 'spark', color: 'stone', title: 'Planik', text: '' };
 }
 

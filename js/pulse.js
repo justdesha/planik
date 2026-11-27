@@ -7,6 +7,13 @@ import { ask } from './ui.js';
 import { bubblesHtml, openStory, periodById } from './stories.js';
 import { humanDate } from './util.js';
 import { selectDate } from './calendar.js';
+import { moodCardHtml, bindMoodCard } from './moodui.js';
+import { toast } from './ui.js';
+
+/** a purchase ticked in Pulse: offer to put it into Money right away */
+function offerSpend(evId, item) {
+  toast(`«${item.text}» куплено. Записати витрату?`, { action: 'Записати', ms: 5000, onAction: () => import('./money.js').then((m) => m.recordPurchaseExt(evId, item.id, renderPulse)) });
+}
 
 export function greetingLine() {
   const h = new Date().getHours();
@@ -54,13 +61,16 @@ let root;
 export function mountPulse(el) {
   root = el;
   bindEventRows(root, renderPulse);
+  bindMoodCard(root, renderPulse);
   root.addEventListener('click', (e) => {
     const b = e.target.closest('[data-p]');
     if (!b) return;
     if (b.dataset.p === 'day') { selectDate(b.dataset.d); window.dispatchEvent(new CustomEvent('planik:tab', { detail: 'home' })); }
     if (b.dataset.p === 'buy') {
-      update((s) => { const ev = s.events.find((x) => x.id === b.dataset.ev); const it = ev && ev.checklist.find((c) => c.id === b.dataset.id); if (it) it.done = !it.done; });
+      let it;
+      update((s) => { const ev = s.events.find((x) => x.id === b.dataset.ev); it = ev && ev.checklist.find((c) => c.id === b.dataset.id); if (it) { it.done = !it.done; it.doneAt = it.done ? Date.now() : 0; } });
       haptic(); renderPulse();
+      if (it && it.done && !it.spent) offerSpend(b.dataset.ev, it);
     }
     if (b.dataset.p === 'open') openEvent(b.dataset.ev, b.dataset.d, renderPulse);
     if (b.dataset.p === 'plan') planItem(b.dataset.ev, b.dataset.id, b.dataset.d);
@@ -78,14 +88,14 @@ async function planItem(evId, itemId, date) {
   if (!item) return;
   const planned = item.planned && getState().events.find((x) => x.id === item.planned);
   const choice = await ask(`«${item.text}» для «${ev.title}»`, [
-    ...(planned ? [{ label: 'Відкрити заплановану справу', value: 'open', style: 'lime' }] : []),
-    { label: 'Запланувати покупку', value: 'buy', style: planned ? 'sand' : 'lime' },
+    ...(planned ? [{ label: 'Відкрити заплановану справу', value: 'open', style: 'acc' }] : []),
+    { label: 'Запланувати покупку', value: 'buy', style: planned ? 'sand' : 'acc' },
     { label: 'Запланувати підготовку', value: 'prep', style: 'sand' },
     { label: item.done ? 'Повернути в список' : 'Позначити готовим', value: 'done', style: 'sand' }
   ]);
   if (!choice) return;
   if (choice === 'open') return openEvent(planned.id, planned.date, renderPulse);
-  if (choice === 'done') { update(() => { item.done = !item.done; }); haptic(); return renderPulse(); }
+  if (choice === 'done') { update(() => { item.done = !item.done; item.doneAt = item.done ? Date.now() : 0; }); haptic(); renderPulse(); if (item.done && !item.spent) offerSpend(evId, item); return; }
   // the day before the event, but never in the past
   const dayBefore = ymd(addDays(parseYmd(date), -1));
   const when = dayBefore < todayYmd() ? todayYmd() : dayBefore;
@@ -127,6 +137,7 @@ export function renderPulse() {
     <header class="page-head"><div><h1 class="hero">Пульс</h1><p>Що попереду і що варто не прогавити</p></div></header>
     ${bubblesHtml()}
     <section class="cheer"><h2 class="h2">${esc(h)}</h2><p>${esc(p)}</p><span class="halves" aria-hidden="true"><i></i><i></i></span></section>
+    ${moodCardHtml()}
 
     <section class="card"><div class="card-h"><h3 class="h3">Наступні 7 днів</h3><span class="small muted">${counts.reduce((a, b) => a + b, 0)} ${plural(counts.reduce((a, b) => a + b, 0), 'план', 'плани', 'планів')}</span></div>
       <div class="week-bars">${days.map((d, i) => `<button class="wb ${i === 0 ? 'today' : ''} ${counts[i] >= 4 ? 'busy' : ''}" data-p="day" data-d="${ymd(d)}" aria-label="${d.getDate()} ${MONTHS_GEN[d.getMonth()]}: ${counts[i]}">

@@ -5,10 +5,22 @@ import { ui, sticker } from './icons.js';
 import { openSheet, ask, toast, segIndicator, toggle } from './ui.js';
 
 const REPEATS = [
-  ['none', 'Не повторювати'], ['daily', 'Щодня'], ['weekdays', 'По буднях'], ['weekly', 'Щотижня'],
+  ['none', 'Не повторювати'], ['daily', 'Щодня'], ['days', 'Обрані дні'], ['weekdays', 'По буднях'], ['weekly', 'Щотижня'],
   ['biweekly', 'Раз на 2 тижні'], ['monthly', 'Щомісяця'], ['yearly', 'Щороку']
 ];
 const REPEAT_LABEL = Object.fromEntries(REPEATS);
+const WD_S = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+const wdOf = (d) => (parseYmd(d).getDay() + 6) % 7;
+/** "Пн, Ср, Пт" or a friendlier phrase for common sets */
+export function daysLabel(days) {
+  const d = [...(days || [])].sort();
+  const k = d.join('');
+  if (k === '01234') return 'По буднях';
+  if (k === '56') return 'По вихідних';
+  if (k === '0123456') return 'Щодня';
+  return 'Щотижня: ' + d.map((i) => WD_S[i]).join(', ');
+}
+export const repeatText = (ev) => { const r = ev.kind === 'birthday' ? 'yearly' : ev.repeat; return r === 'days' ? daysLabel(ev.days) : REPEAT_LABEL[r]; };
 
 const CHEERS = ['Зроблено. Так тримати!', 'Мінус одна справа', 'Готово. Ти в ритмі', 'Ще один крок уперед', 'Красиво закрито'];
 export const cheer = () => CHEERS[Math.floor(Math.random() * CHEERS.length)];
@@ -85,7 +97,7 @@ export function openEvent(id, date, rerender) {
     const done = isDone(ev, date);
     const cl = ev.checklist || [];
     return `
-    <div class="det-hero c-${color}" style="background:var(--cut);color:${color === 'ink' ? 'var(--cream)' : ['forest', 'red'].includes(color) ? '#FFF6EE' : 'var(--on-color)'}">
+    <div class="det-hero c-${color}" style="background:var(--cut);color:${color === 'ink' ? 'var(--cream)' : ['cobalt', 'red', 'navy'].includes(color) ? '#FFF6EE' : 'var(--on-color)'}">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="sb" style="background:rgba(255,255,255,.22);--cut:transparent;color:inherit">${sticker(evIcon(ev))}</span>
         <span class="tag" style="background:rgba(255,255,255,.28);color:inherit">${ev.kind === 'birthday' ? 'День народження' : esc(cat.name)}</span>
@@ -96,14 +108,14 @@ export function openEvent(id, date, rerender) {
       <div class="meta">${humanDate(date, { withWeekday: true })} · ${timeLabel(ev)}${age ? ` · виповнюється ${age}` : ''}</div>
     </div>
     <div class="card" style="padding:4px 16px">
-      ${(ev.kind === 'birthday' ? 'yearly' : ev.repeat) !== 'none' && (ev.repeat || ev.kind === 'birthday') ? `<div class="det-row">${ui('repeat')}<div>${REPEAT_LABEL[ev.kind === 'birthday' ? 'yearly' : ev.repeat]}${ev.until ? `, до ${humanDate(ev.until)}` : ''}</div></div>` : ''}
+      ${(ev.kind === 'birthday' ? 'yearly' : ev.repeat) !== 'none' && (ev.repeat || ev.kind === 'birthday') ? `<div class="det-row">${ui('repeat')}<div>${repeatText(ev)}${ev.until ? `, до ${humanDate(ev.until)}` : ''}</div></div>` : ''}
       <div class="det-row">${ui('bell')}<div>${rem.length ? rem.map((m) => m === 0 ? 'у момент події' : 'за ' + inWords(m)).join(', ') : 'Без нагадувань'}</div></div>
       ${ev.place ? `<div class="det-row">${ui('place')}<div>${esc(ev.place)}</div></div>` : ''}
       ${ev.notes ? `<div class="det-row">${ui('note')}<div style="white-space:pre-wrap;-webkit-user-select:text;user-select:text">${esc(ev.notes)}</div></div>` : ''}
     </div>
     ${cl.length ? `<div class="card"><div class="card-h"><h3 class="h3">Підготувати й купити</h3><span class="small muted">${cl.filter((c) => c.done).length} з ${cl.length}</span></div>
       ${cl.map((c) => `<button class="cl-item ${c.done ? 'on' : ''}" data-cl="${c.id}"><span class="cl-box">${ui('check')}</span><span class="cl-t">${esc(c.text)}</span></button>`).join('')}</div>` : ''}
-    ${ev.kind === 'task' ? `<button class="btn ${done ? 'btn-sand' : 'btn-lime'} btn-block" data-act="done" style="margin-bottom:10px">${ui('check')}${done ? 'Повернути в роботу' : 'Позначити виконаним'}</button>` : ''}
+    ${ev.kind === 'task' ? `<button class="btn ${done ? 'btn-sand' : 'btn-acc'} btn-block" data-act="done" style="margin-bottom:10px">${ui('check')}${done ? 'Повернути в роботу' : 'Позначити виконаним'}</button>` : ''}
     <div class="det-actions">
       <button class="btn btn-ink" data-act="edit">${ui('edit')}Змінити</button>
       <button class="ibtn" data-act="ics" aria-label="Додати в Календар iPhone" style="width:54px;height:54px">${ui('download')}</button>
@@ -118,7 +130,7 @@ export function openEvent(id, date, rerender) {
       s.body.addEventListener('click', async (e) => {
         const c = e.target.closest('[data-cl]');
         if (c) {
-          update(() => { const it = ev.checklist.find((x) => x.id === c.dataset.cl); it.done = !it.done; });
+          update(() => { const it = ev.checklist.find((x) => x.id === c.dataset.cl); it.done = !it.done; it.doneAt = it.done ? Date.now() : 0; });
           haptic(); s.setHtml(render()); rerender && rerender(); return;
         }
         const a = e.target.closest('[data-act]');
@@ -192,6 +204,8 @@ export function openEventForm({ ev: existing, date, kind, preset, onSaved } = {}
       <div><span class="lbl">Кінець</span><input class="inp" type="time" id="fEnd" value="${ev.end || ''}"></div></div>` : ''}
     ${bd ? '' : `<div class="field"><span class="lbl">Повтор</span><div class="chips scroll">
       ${REPEATS.map(([k, l]) => `<button type="button" class="chip" data-rep="${k}" aria-pressed="${rep === k}">${l}</button>`).join('')}</div>
+      ${rep === 'days' ? `<div class="wd-pick" role="group" aria-label="Дні тижня">${WD_S.map((l, i) => `<button type="button" class="wd-dot" data-wd="${i}" aria-pressed="${(ev.days || []).includes(i)}">${l}</button>`).join('')}</div>
+        <p class="tiny muted" style="margin:8px 4px 0">${(ev.days || []).length ? daysLabel(ev.days) : 'Обери хоча б один день'}</p>` : ''}
       ${rep !== 'none' ? `<div style="margin-top:10px" class="two"><span class="small muted" style="align-self:center;padding-left:4px">Повторювати до</span><input class="inp" type="date" id="fUntil" value="${ev.until || ''}"></div>` : ''}
     </div>`}
     <div class="field"><button type="button" class="opt-card ${ev.important ? 'on-red' : ''}" data-tg="important">
@@ -226,7 +240,7 @@ export function openEventForm({ ev: existing, date, kind, preset, onSaved } = {}
     full: true,
     title: isNew ? (preset && preset.kind === 'task' ? 'Нова справа' : 'Новий план') : 'Змінити',
     html: body(),
-    foot: `<button class="btn btn-lime btn-block" id="fSave">${isNew ? 'Додати в календар' : 'Зберегти зміни'}</button>`,
+    foot: `<button class="btn btn-acc btn-block" id="fSave">${isNew ? 'Додати в календар' : 'Зберегти зміни'}</button>`,
     onMount(s) {
       const rerender = () => {
         readInputs(s.body);
@@ -250,7 +264,12 @@ export function openEventForm({ ev: existing, date, kind, preset, onSaved } = {}
           if (!customRemind) ev.remind = null;
           haptic(); rerender();
         } else if (t.dataset.cat) { ev.cat = t.dataset.cat; haptic(); rerender(); }
-        else if (t.dataset.rep) { ev.repeat = t.dataset.rep; haptic(); rerender(); }
+        else if (t.dataset.rep) { ev.repeat = t.dataset.rep; if (ev.repeat === 'days' && !(ev.days || []).length) ev.days = [wdOf(ev.date)]; haptic(); rerender(); }
+        else if (t.dataset.wd !== undefined) {
+          const i = +t.dataset.wd; ev.days = ev.days || [];
+          ev.days = ev.days.includes(i) ? ev.days.filter((x) => x !== i) : [...ev.days, i].sort();
+          haptic(); rerender();
+        }
         else if (t.dataset.tg === 'allDay') { ev.allDay = !ev.allDay; if (!ev.allDay && !ev.start) ev.start = nextHalfHour(); haptic(); rerender(); }
         else if (t.dataset.tg === 'important') { ev.important = !ev.important; if (!customRemind) ev.remind = null; haptic(); rerender(); }
         else if (t.dataset.rem !== undefined) {
@@ -286,6 +305,7 @@ export function openEventForm({ ev: existing, date, kind, preset, onSaved } = {}
         if (ev.allDay) { ev.start = ''; ev.end = ''; }
         if (ev.end && ev.start && ev.end < ev.start) ev.end = '';
         if (ev.repeat === 'none') ev.until = '';
+        if (ev.repeat === 'days') { if (!(ev.days || []).length) ev.days = [wdOf(ev.date)]; } else delete ev.days;
         if (!customRemind) ev.remind = null;
         ev.birthYear = ev.birthYear ? Number(ev.birthYear) : '';
         saveEvent(ev);
@@ -320,6 +340,7 @@ function downloadIcs(ev) {
   }
   const rep = ev.kind === 'birthday' ? 'yearly' : ev.repeat;
   const RR = { daily: 'FREQ=DAILY', weekdays: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', weekly: 'FREQ=WEEKLY', biweekly: 'FREQ=WEEKLY;INTERVAL=2', monthly: 'FREQ=MONTHLY', yearly: 'FREQ=YEARLY' };
+  if (rep === 'days') RR.days = 'FREQ=WEEKLY;BYDAY=' + (ev.days || []).map((i) => ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'][i]).join(',');
   if (RR[rep]) lines.push(`RRULE:${RR[rep]}${ev.until ? ';UNTIL=' + dOnly(ev.until) + 'T235959Z' : ''}`);
   if (ev.place) lines.push(`LOCATION:${icsText(ev.place)}`);
   if (ev.notes) lines.push(`DESCRIPTION:${icsText(ev.notes)}`);

@@ -39,6 +39,8 @@ const UI = {
   task: '<rect x="4" y="4" width="16" height="16" rx="5"/><path d="m8.5 12.3 2.5 2.5 4.5-5"/>',
   spark: '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/>',
   heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20z"/>',
+  wallet: '<path d="M4.5 8V7a2.5 2.5 0 0 1 2.5-2.5h9.5V8"/><rect x="4" y="8" width="16.5" height="12" rx="3"/><path d="M20.5 12h-4a2 2 0 0 0 0 4h4"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
   flame: '<path d="M12 21a6 6 0 0 0 6-6c0-5-4-6-5.5-11C11 7 8.5 8 8.5 11c-1 0-2-1-2.3-2.3C5.4 10 6 12 6 15a6 6 0 0 0 6 6z"/>'
 };
 
@@ -93,7 +95,32 @@ const ST = {
   car: `<path d="M9 21l4-10h22l4 10h3a2.5 2.5 0 0 1 2.5 2.5V35H3.5V23.5A2.5 2.5 0 0 1 6 21z"/><path d="M14.5 14h19l2.5 7h-24z" fill="${C}"/><circle cx="13.5" cy="35" r="6" fill="${C}"/><circle cx="13.5" cy="35" r="3.8"/><circle cx="34.5" cy="35" r="6" fill="${C}"/><circle cx="34.5" cy="35" r="3.8"/>`,
   brush: `<path d="M30 4.5l6 3-8.5 18-6-3z"/><path d="M14 23.5l14 6.5-2.5 6c-1 2.5-4 4.5-6 8.5-3-2.5-6.5-3.5-12-5 4.5-3.5 5-8 6.5-11.5z"/><path d="M16 35l4 2M12.5 33l2 1" stroke="${C}" stroke-width="2.4" stroke-linecap="round"/>`,
   lotus: `<path d="M24 8c-4.5 5-6 11-6 16s2.5 10 6 13c3.5-3 6-8 6-13s-1.5-11-6-16z"/><path d="M15.5 17c-6.5 0-11 1-12 2 0 8 6 17 20.5 18-5-4-8.5-11-8.5-20zM32.5 17c6.5 0 11 1 12 2 0 8-6 17-20.5 18 5-4 8.5-11 8.5-20z"/>`,
-  globe: `<circle cx="24" cy="24" r="19.5"/><path d="M4.5 24h39M24 4.5c-6 6-6 33 0 39M24 4.5c6 6 6 33 0 39M8 13.5h32M8 34.5h32" stroke="${C}" stroke-width="2.6" fill="none"/>`
+  globe: `<circle cx="24" cy="24" r="19.5"/><path d="M4.5 24h39M24 4.5c-6 6-6 33 0 39M24 4.5c6 6 6 33 0 39M8 13.5h32M8 34.5h32" stroke="${C}" stroke-width="2.6" fill="none"/>`,
+  // ---- money (1.2) ----
+  basket: `<path d="M4 18h40l-4.5 22a3 3 0 0 1-3 2.5h-25a3 3 0 0 1-3-2.5z"/><path d="M13 18l7-11M35 18l-7-11" stroke="currentColor" stroke-width="3.6" fill="none" stroke-linecap="round"/><path d="M17 25v11M24 25v11M31 25v11" stroke="${C}" stroke-width="3" stroke-linecap="round"/>`,
+  cutlery: `<path d="M11 4v13a5 5 0 0 0 3.5 4.8V44h5V21.8A5 5 0 0 0 23 17V4h-3.5v11h-2V4h-3v11h-2V4z"/><path d="M36 4c-5 0-8 7-8 15 0 4 2 6 4.5 6.5V44h5V4z"/>`,
+  box: `<path d="M24 4 43 13v22L24 44 5 35V13z"/><path d="M5 13l19 9 19-9M24 22v22" stroke="${C}" stroke-width="2.8" fill="none" stroke-linejoin="round"/><path d="M14.5 8.5 34 18v7" stroke="${C}" stroke-width="2.8" fill="none"/>`,
+  bus: `<rect x="7" y="5" width="34" height="34" rx="7"/><rect x="11.5" y="11" width="25" height="12" rx="2.5" fill="${C}"/><circle cx="15" cy="31" r="2.6" fill="${C}"/><circle cx="33" cy="31" r="2.6" fill="${C}"/><rect x="10" y="38" width="6" height="7" rx="2"/><rect x="32" y="38" width="6" height="7" rx="2"/>`,
+  taxi: `<rect x="18" y="6" width="12" height="6" rx="2"/><path d="M8 24l4-9a4 4 0 0 1 3.7-2.5h16.6A4 4 0 0 1 36 15l4 9a5 5 0 0 1 4 5v8H4v-8a5 5 0 0 1 4-5z"/><path d="M12 24h24" stroke="${C}" stroke-width="2.6"/><circle cx="12" cy="31" r="3" fill="${C}"/><circle cx="36" cy="31" r="3" fill="${C}"/><rect x="7" y="37" width="7" height="6" rx="2"/><rect x="34" y="37" width="7" height="6" rx="2"/>`,
+  bulb: `<path d="M24 3a14 14 0 0 0-8 25.5c1.5 1 2.5 2.7 2.5 4.5v1h11v-1c0-1.8 1-3.5 2.5-4.5A14 14 0 0 0 24 3z"/><rect x="18.5" y="37" width="11" height="4" rx="1.5"/><rect x="20.5" y="42.5" width="7" height="3" rx="1.5"/><path d="M20 22l4 4 4-4" stroke="${C}" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+  wifi: `<path d="M4 18a28 28 0 0 1 40 0" stroke="currentColor" stroke-width="5.5" fill="none" stroke-linecap="round"/><path d="M11 25.5a18 18 0 0 1 26 0" stroke="currentColor" stroke-width="5.5" fill="none" stroke-linecap="round"/><path d="M17.5 32.5a9 9 0 0 1 13 0" stroke="currentColor" stroke-width="5.5" fill="none" stroke-linecap="round"/><circle cx="24" cy="40" r="4"/>`,
+  play: `<rect x="4" y="8" width="40" height="30" rx="7"/><path d="M20 16v14l12-7z" fill="${C}"/><rect x="15" y="40.5" width="18" height="4" rx="2"/>`,
+  bag: `<path d="M8 15h32l2.5 29h-37z"/><path d="M17 20v-7a7 7 0 0 1 14 0v7" stroke="currentColor" stroke-width="3.8" fill="none" stroke-linecap="round"/><circle cx="17" cy="21" r="2.4" fill="${C}"/><circle cx="31" cy="21" r="2.4" fill="${C}"/>`,
+  lipstick: `<path d="M18 4h12v8l-12 5z"/><rect x="16" y="19" width="16" height="7" rx="1.5"/><rect x="13" y="27" width="22" height="18" rx="3"/><path d="M13 34h22" stroke="${C}" stroke-width="2.6"/>`,
+  ticket: `<path d="M4 12h40v8a4 4 0 0 0 0 8v8H4v-8a4 4 0 0 0 0-8z"/><path d="M31 13v22" stroke="${C}" stroke-width="2.6" stroke-dasharray="3 3"/><path d="M12 20h12M12 27h8" stroke="${C}" stroke-width="3" stroke-linecap="round"/>`,
+  cap: `<path d="M24 7 2 18l22 11 22-11z"/><path d="M11 23.5V33c0 3.5 6 7 13 7s13-3.5 13-7v-9.5L24 30z"/><path d="M42 20v12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><circle cx="42" cy="34" r="3"/>`,
+  teddy: `<circle cx="12" cy="11" r="6"/><circle cx="36" cy="11" r="6"/><circle cx="24" cy="21" r="13"/><ellipse cx="24" cy="38" rx="13" ry="8"/><circle cx="19.5" cy="18.5" r="2" fill="${C}"/><circle cx="28.5" cy="18.5" r="2" fill="${C}"/><ellipse cx="24" cy="25.5" rx="4.5" ry="3.5" fill="${C}"/>`,
+  sofa: `<rect x="9" y="10" width="30" height="17" rx="5"/><rect x="3" y="19" width="9" height="18" rx="4"/><rect x="36" y="19" width="9" height="18" rx="4"/><rect x="9" y="27" width="30" height="10"/><path d="M24 12v15" stroke="${C}" stroke-width="2.4"/><rect x="6" y="37" width="5" height="6" rx="1.5"/><rect x="37" y="37" width="5" height="6" rx="1.5"/>`,
+  laptop: `<rect x="8" y="8" width="32" height="23" rx="3.5"/><rect x="12" y="12" width="24" height="15" rx="1.5" fill="${C}"/><path d="M2 34h44l-3 6H5z"/>`,
+  handheart: `<path d="M24 25s-11-6.5-11-14a6 6 0 0 1 11-3.4A6 6 0 0 1 35 11c0 7.5-11 14-11 14z"/><path d="M3 32h8l7 3h9a3 3 0 0 1 0 6H17" stroke="currentColor" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M27 38l11-5.5a3 3 0 0 1 3.5 4.7L30 45H3" stroke="currentColor" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+  receipt: `<path d="M9 3h30v42l-5-3.5-5 3.5-5-3.5-5 3.5-5-3.5-5 3.5z"/><path d="M15 13h18M15 20h18M15 27h11" stroke="${C}" stroke-width="3" stroke-linecap="round"/>`,
+  dots: `<circle cx="9" cy="24" r="5.5"/><circle cx="24" cy="24" r="5.5"/><circle cx="39" cy="24" r="5.5"/>`,
+  percent: `<circle cx="24" cy="24" r="20"/><path d="M15 33 33 15" stroke="${C}" stroke-width="3.6" stroke-linecap="round"/><circle cx="16.5" cy="16.5" r="3.6" fill="${C}"/><circle cx="31.5" cy="31.5" r="3.6" fill="${C}"/>`,
+  tag: `<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h15.5l22 22-18 18-22-22z"/><circle cx="14" cy="14" r="4" fill="${C}"/>`,
+  handback: `<path d="M17 9 6 19l11 10" stroke="currentColor" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 19h22a13 13 0 0 1 0 26H18" stroke="currentColor" stroke-width="5" fill="none" stroke-linecap="round"/>`,
+  piggy: `<path d="M8 24a15 13 0 0 1 15-13h6a15 13 0 0 1 12 6l4-1v10l-3.5 1.5a15 13 0 0 1-6.5 7.5V42h-6v-4h-8v4h-6v-6a13 13 0 0 1-5-7l-4-1v-6z"/><path d="M20 15h8" stroke="${C}" stroke-width="3" stroke-linecap="round"/><circle cx="34" cy="22" r="2.2" fill="${C}"/><rect x="22" y="3" width="6" height="9" rx="2"/>`,
+  wallet: `<path d="M5 13a5 5 0 0 1 5-5h24v6H10a2 2 0 0 0 0 4h33v20a5 5 0 0 1-5 5H10a5 5 0 0 1-5-5z"/><circle cx="35" cy="30" r="3.2" fill="${C}"/>`,
+  calrep: `<rect x="5" y="8" width="38" height="35" rx="7"/><path d="M5 17h38" stroke="${C}" stroke-width="3"/><rect x="13" y="3" width="5" height="10" rx="2.5"/><rect x="30" y="3" width="5" height="10" rx="2.5"/><path d="M16 30a8 8 0 0 1 14.5-4.5M32 32a8 8 0 0 1-14.5 4.5" stroke="${C}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M31 21v5h-5M17 41v-5h5" stroke="${C}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
 };
 
 export const STICKERS = Object.keys(ST);

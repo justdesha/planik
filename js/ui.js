@@ -77,7 +77,7 @@ export function openSheet({ title = '', head = '', html = '', foot = '', full = 
 
 export const closeAllSheets = () => [...stack].forEach((s) => s.close());
 
-/** Action sheet. actions: [{label, value, style:'lime'|'ink'|'sand'|'danger'}] → Promise<value|null> */
+/** Action sheet. actions: [{label, value, style:'butter'|'ink'|'sand'|'danger'}] → Promise<value|null> */
 export function ask(message, actions) {
   return new Promise((resolve) => {
     let picked = null;

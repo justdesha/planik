@@ -6,6 +6,9 @@ import { mountHome, render as renderHome } from './calendar.js';
 import { mountTrackers, renderTrackers } from './trackers.js';
 import { mountPulse, renderPulse } from './pulse.js';
 import { mountProfile, renderProfile } from './profile.js';
+import { mountMoney, renderMoney, moneyHasData, moneySlides } from './money.js';
+import { setExtraData, setExtraSlides } from './stories.js';
+import { maybeWhatsNew } from './whatsnew.js';
 import { runOnboarding } from './onboarding.js';
 import { openEventForm, openEvent } from './events.js';
 import { tick } from './notify.js';
@@ -15,8 +18,10 @@ import { applyTheme } from './profile.js';
 const TABS = [
   { id: 'home', label: 'Календар', icon: 'calendar', render: () => renderHome() },
   { id: 'trackers', label: 'Трекери', icon: 'tracker', render: () => renderTrackers() },
+  { id: 'money', label: 'Гроші', icon: 'wallet', render: () => renderMoney() },
   { id: 'pulse', label: 'Пульс', icon: 'pulse', render: () => renderPulse() },
-  { id: 'profile', label: 'Профіль', icon: 'user', render: () => renderProfile() }
+  // profile has no tab: it opens from the avatar on the home screen
+  { id: 'profile', label: 'Профіль', icon: 'user', render: () => renderProfile(), hidden: true }
 ];
 let current = 'home';
 
@@ -33,6 +38,7 @@ function shell() {
   mountHome($('#s-home'));
   mountTrackers($('#s-trackers'));
   mountPulse($('#s-pulse'));
+  mountMoney($('#s-money'));
   mountProfile($('#s-profile'), { restartOnboarding: () => runOnboarding(() => refresh()) });
 
   $('.nav').addEventListener('click', (e) => {
@@ -51,10 +57,12 @@ const tabBtn = (t) => `<button class="nav-tab" data-tab="${t.id}" ${t.id === cur
 
 function moveIndicator(id, animate = true, fromId) {
   const nav = $('.nav'), ind = $('.nav-ind'), tab = nav.querySelector(`[data-tab="${id}"]`);
+  ind.style.opacity = tab ? '' : '0';
   if (!tab) return;
   const n = nav.getBoundingClientRect(), r = tab.getBoundingClientRect();
   const left = r.left - n.left + 3, right = n.right - r.right + 3;
   const order = TABS.map((t) => t.id);
+  if (!nav.querySelector(`[data-tab="${fromId}"]`)) animate = false;
   const goingRight = order.indexOf(id) > order.indexOf(fromId);
   if (animate) {
     // leading edge moves first, trailing edge catches up — it stretches like a drop
@@ -119,7 +127,7 @@ function registerSW() {
 function showUpdate(worker) {
   const bar = document.createElement('div');
   bar.className = 'update-bar';
-  bar.innerHTML = '<span>Є нова версія Planik</span><button class="btn btn-lime btn-sm">Оновити</button>';
+  bar.innerHTML = '<span>Є нова версія Planik</span><button class="btn btn-acc btn-sm">Оновити</button>';
   bar.querySelector('button').onclick = () => worker.postMessage('skipWaiting');
   document.body.append(bar);
 }
@@ -129,7 +137,10 @@ function start() {
   shell();
   const st = getState();
   refresh();
+  setExtraData(moneyHasData);
+  setExtraSlides(moneySlides);
   if (!st.user.onboarded) runOnboarding(() => refresh());
+  else setTimeout(maybeWhatsNew, 600);
   openFromHash();
   tick(refresh);
   setInterval(() => tick(refresh), 30000);

@@ -5,14 +5,14 @@ import { ui, sticker, STICKER_ORDER } from './icons.js';
 import { openSheet, ask, toast, toggle, segIndicator } from './ui.js';
 import { askPermission, notifState, isStandalone, updateBadge } from './notify.js';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 
 /** resolve "auto" against the phone setting and paint the theme */
 export function applyTheme() {
   const pref = getState().settings.theme || 'auto';
   const dark = pref === 'dark' || (pref === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', dark ? '#131210' : '#F3EEE3'));
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', dark ? '#0E0F14' : '#F8F6F1'));
 }
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme());
 
@@ -126,6 +126,10 @@ export function mountProfile(el, { restartOnboarding }) {
       inp.click();
     } else if (a === 'cat') {
       openCategoryForm();
+    } else if (a === 'back') {
+      window.dispatchEvent(new CustomEvent('planik:tab', { detail: 'home' }));
+    } else if (a === 'news') {
+      import('./whatsnew.js').then((m) => m.showWhatsNew({ replay: true }));
     } else if (a === 'onboard') {
       restartOnboarding();
     } else if (a === 'reset') {
@@ -145,7 +149,7 @@ export function renderProfile() {
   const initial = (st.user.name || 'P').trim()[0].toUpperCase();
   const permText = perm === 'granted' ? 'Увімкнено' : perm === 'denied' ? 'Вимкнено в Параметрах iPhone' : perm === 'unsupported' ? (isStandalone() ? 'Цей iOS не підтримує сповіщення' : 'Працює після додавання на початковий екран') : 'Ще не дозволено';
   root.innerHTML = `
-    <header class="page-head"><div><h1 class="hero">Профіль</h1></div></header>
+    <header class="page-head"><div><button class="back-link" data-pr="back">${ui('left')}Календар</button><h1 class="hero">Профіль</h1></div></header>
     <div class="prof-hero">
       <button class="avatar" data-pr="photo" aria-label="Змінити фото">${st.user.photo ? `<img src="${st.user.photo}" alt="">` : esc(initial)}<span class="ibtn sm ink cam">${ui('camera')}</span></button>
       <input class="inp" id="pName" value="${esc(st.user.name)}" placeholder="Твоє імʼя" style="text-align:center;max-width:260px;font-family:var(--display);font-weight:900;font-size:20px">
@@ -159,18 +163,19 @@ export function renderProfile() {
 
     <section class="set-group"><h2 class="h3">Сповіщення</h2>
       <div class="set">
-        <div class="set-row"><span class="grow">Сповіщення від Planik<span>${permText}</span></span>${perm === 'default' ? '<button class="btn btn-lime btn-sm" data-pr="perm">Дозволити</button>' : ''}</div>
+        <div class="set-row"><span class="grow">Сповіщення від Planik<span>${permText}</span></span>${perm === 'default' ? '<button class="btn btn-acc btn-sm" data-pr="perm">Дозволити</button>' : ''}</div>
         <button class="set-row" data-tgl="badge"><span class="grow">Лічильник на іконці<span>Кількість непрочитаних нагадувань на початковому екрані</span></span>${toggle('badge', st.settings.badge)}</button>
       </div></section>
 
     <section class="set-group"><h2 class="h3">Категорії</h2>
       <div class="set" style="padding:14px 16px"><div class="chips">${st.categories.map((c) => `<span class="chip"><span class="sb sm c-${c.color}" style="width:24px;height:24px">${sticker(c.icon)}</span>${esc(c.name)}</span>`).join('')}
-        <button class="chip" data-pr="cat" style="background:var(--lime);color:var(--on-color)">${ui('plus')}Своя категорія</button></div></div></section>
+        <button class="chip" data-pr="cat" style="background:var(--butter);color:var(--on-color)">${ui('plus')}Своя категорія</button></div></div></section>
 
     <section class="set-group"><h2 class="h3">Дані</h2><p>Усе зберігається тільки на цьому телефоні. Роби копію час від часу.</p>
       <div class="set">
         <button class="set-row" data-pr="export">${ui('download')}<span class="grow">Зберегти резервну копію<span>Файл .json у Файли або iCloud</span></span></button>
         <button class="set-row" data-pr="import">${ui('upload')}<span class="grow">Відновити з копії</span></button>
+        <button class="set-row" data-pr="news">${ui('spark')}<span class="grow">Що нового<span>Planik ${VERSION} у сторіз</span></span></button>
         <button class="set-row" data-pr="onboard">${ui('repeat')}<span class="grow">Пройти знайомство знову</span></button>
         <button class="set-row danger" data-pr="reset">${ui('trash')}<span class="grow">Видалити всі дані</span></button>
       </div></section>
@@ -180,14 +185,14 @@ export function renderProfile() {
 
 function openCategoryForm() {
   const colors = Object.keys(PALETTE).filter((c) => c !== 'red');
-  const c = { id: uid(), name: '', color: 'lilac', icon: 'star' };
+  const c = { id: uid(), name: '', color: 'sky', icon: 'star' };
   const body = () => `
     <div class="field"><span class="lbl">Назва</span><input class="inp" id="cName" maxlength="24" placeholder="Напр. Подорожі" value="${esc(c.name)}"></div>
     <div class="field"><span class="lbl">Колір</span><div class="colors">${colors.map((k) => `<button type="button" class="swatch" data-col="${k}" aria-pressed="${c.color === k}" style="background:var(--${k})"></button>`).join('')}</div></div>
     <div class="field"><span class="lbl">Іконка</span><div class="st-row">${STICKER_ORDER.map((s) => `<button type="button" class="st-pick c-${s === c.icon ? c.color : 'sand'}" data-ic="${s}" aria-pressed="${s === c.icon}" style="${s === c.icon ? `--cut:var(--${c.color});background:var(--cut)` : ''}">${sticker(s)}</button>`).join('')}</div></div>`;
   openSheet({
     title: 'Своя категорія', full: true, html: body(),
-    foot: '<button class="btn btn-lime btn-block" id="cSave">Додати категорію</button>',
+    foot: '<button class="btn btn-acc btn-block" id="cSave">Додати категорію</button>',
     onMount(s) {
       s.body.addEventListener('click', (e) => {
         const b = e.target.closest('button'); if (!b) return;
