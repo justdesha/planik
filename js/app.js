@@ -104,17 +104,6 @@ function bindTabSwipe() {
   }, { passive: true });
 }
 
-/* ---------- keep the swipe history clean ----------
-   iPhone treats an edge swipe as back/forward. An anchor entry means there is never
-   a "forward" page to land on, and "back" just closes the top sheet. */
-function anchorHistory() {
-  try { history.pushState({ planik: 1 }, '', location.pathname); } catch (e) { return; }
-  window.addEventListener('popstate', () => {
-    closeAllSheets();
-    try { history.pushState({ planik: 1 }, '', location.pathname); } catch (e) { /* ignore */ }
-  });
-}
-
 function switchTab(id, { silent = false, dir = 0 } = {}) {
   if (id === current) {
     if (id === 'home') { import('./calendar.js').then((m) => m.goToday()); }
@@ -151,27 +140,22 @@ function openFromHash() {
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('./sw.js').then((reg) => {
-    reg.addEventListener('updatefound', () => {
-      const nw = reg.installing;
-      nw && nw.addEventListener('statechange', () => {
-        if (nw.state === 'installed' && navigator.serviceWorker.controller) showUpdate(nw);
-      });
-    });
+    // look for a new version every time Planik comes back to the screen
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
   }).catch(() => {});
-  let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+  // a new version took over: reload, but never in the middle of filling something in
+  let pending = false;
+  const busy = () => !!document.querySelector('.sheet.on, .sx, .ob');
+  const reloadWhenFree = () => {
+    if (!pending) return;
+    if (busy()) return setTimeout(reloadWhenFree, 1500);
+    pending = false; location.reload();
+  };
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!pending) { pending = true; reloadWhenFree(); } });
   navigator.serviceWorker.addEventListener('message', (e) => {
     const d = e.data && e.data.open;
     if (d && d.eventId) { closeAllSheets(); switchTab('home', { silent: true }); openEvent(d.eventId, d.date, refresh); }
   });
-}
-
-function showUpdate(worker) {
-  const bar = document.createElement('div');
-  bar.className = 'update-bar';
-  bar.innerHTML = '<span>Є нова версія Planik</span><button class="btn btn-acc btn-sm">Оновити</button>';
-  bar.querySelector('button').onclick = () => worker.postMessage('skipWaiting');
-  document.body.append(bar);
 }
 
 function start() {
@@ -191,7 +175,6 @@ function start() {
   window.addEventListener('planik:tab', (e) => switchTab(e.detail));
   registerSW();
   bindTabSwipe();
-  anchorHistory();
 }
 
 start();

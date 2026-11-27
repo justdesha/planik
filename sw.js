@@ -1,6 +1,6 @@
 // Planik service worker: keeps the app working offline.
 // Bump VERSION on every release so phones pick up new files.
-const VERSION = 'planik-v1.2.1';
+const VERSION = 'planik-v1.2.2';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/util.js', './js/store.js', './js/icons.js', './js/ui.js',
@@ -16,7 +16,9 @@ const FILES = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)));
+  // cache: 'reload' skips the browser's HTTP cache (GitHub Pages keeps files for 10 min),
+  // otherwise a new version could be stored with old files inside
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {

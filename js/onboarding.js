@@ -2,7 +2,7 @@
 import { esc, uid, haptic } from './util.js';
 import { getState, update, saveEvent } from './store.js';
 import { ui, sticker } from './icons.js';
-import { remindersHtml, bindReminders, pickPhoto, VERSION } from './profile.js';
+import { remindersHtml, bindReminders, pickPhoto, VERSION, importBackup } from './profile.js';
 import { askPermission, isStandalone, notifState, updateBadge } from './notify.js';
 import { toggle } from './ui.js';
 
@@ -82,7 +82,9 @@ export function runOnboarding(onDone) {
       <div class="ob-top">${step > 0 && key !== 'done' ? `<button class="ibtn sm" id="obBack" aria-label="Назад">${ui('left')}</button>` : '<span class="ob-word">planik</span>'}
         ${['photo', 'bdays', 'notify'].includes(key) ? '<button class="ob-skip" id="obSkip">Пропустити</button>' : ''}</div>
       <div class="ob-stage"><div class="ob-step ${dir < 0 ? 'back' : ''}">${views[key]()}</div></div>
-      <div class="ob-foot"><button class="btn btn-acc" id="obNext">${key === 'welcome' ? 'Почнімо' : key === 'done' ? 'Відкрити календар' : 'Далі'}${key === 'done' ? '' : ui('right')}</button></div>`;
+      <div class="ob-foot ${key === 'welcome' ? 'col' : ''}"><button class="btn btn-acc" id="obNext">${key === 'welcome' ? 'Почнімо' : key === 'done' ? 'Відкрити календар' : 'Далі'}${key === 'done' ? '' : ui('right')}</button>
+        ${key === 'welcome' ? `<button class="btn btn-ghost ob-restore" id="obRestore">${ui('upload')}Відновити з копії</button>` : ''}</div>`;
+    el.querySelector('#obRestore')?.addEventListener('click', () => importBackup());
     if (key === 'name') setTimeout(() => el.querySelector('#obName')?.focus(), 350);
     if (key === 'remind') bindReminders(el.querySelector('#obRem'));
   };

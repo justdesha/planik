@@ -5,7 +5,7 @@ import { ui, sticker, STICKER_ORDER } from './icons.js';
 import { openSheet, ask, toast, toggle, segIndicator, saveFile } from './ui.js';
 import { askPermission, notifState, isStandalone, updateBadge } from './notify.js';
 
-export const VERSION = '1.2.1';
+export const VERSION = '1.2.2';
 
 /** resolve "auto" against the phone setting and paint the theme */
 export function applyTheme() {
@@ -78,6 +78,24 @@ export function pickPhoto() {
 }
 
 let root;
+/** pick a .json backup and replace everything with it */
+export function importBackup() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'application/json,.json';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    try {
+      const data = JSON.parse(await f.text());
+      const fresh = !getState().user.onboarded;
+      const ok = fresh || await ask('Поточні дані заміняться даними з копії.', [{ label: 'Відновити', value: true, style: 'ink' }]);
+      if (!ok) return;
+      data.user = { ...(data.user || {}), onboarded: true };
+      importState(data); location.reload();
+    } catch (err) { toast(err.message && err.message.includes('Planik') ? err.message : 'Файл не вдалося прочитати'); }
+  };
+  inp.click();
+}
+
 export function mountProfile(el, { restartOnboarding }) {
   root = el;
   bindReminders(root);
@@ -109,18 +127,7 @@ export function mountProfile(el, { restartOnboarding }) {
       if (r === 'shared') toast('Копію передано'); else if (r === 'downloaded') toast('Копію збережено');
       else if (r === 'fail') toast('Не вдалося зберегти копію');
     } else if (a === 'import') {
-      const inp = document.createElement('input');
-      inp.type = 'file'; inp.accept = 'application/json,.json';
-      inp.onchange = async () => {
-        const f = inp.files[0]; if (!f) return;
-        try {
-          const data = JSON.parse(await f.text());
-          const ok = await ask('Поточні дані заміняться даними з копії.', [{ label: 'Відновити', value: true, style: 'ink' }]);
-          if (!ok) return;
-          importState(data); location.reload();
-        } catch (err) { toast(err.message || 'Файл не вдалося прочитати'); }
-      };
-      inp.click();
+      importBackup();
     } else if (a === 'cat') {
       openCategoryForm();
     } else if (a === 'back') {
