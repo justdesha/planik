@@ -1,6 +1,6 @@
 // Planik service worker: keeps the app working offline.
 // Bump VERSION on every release so phones pick up new files.
-const VERSION = 'planik-v1.2.0';
+const VERSION = 'planik-v1.2.1';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/util.js', './js/store.js', './js/icons.js', './js/ui.js',

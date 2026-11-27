@@ -64,7 +64,8 @@ export function maybeWhatsNew() {
 }
 
 export function showWhatsNew({ from = '', replay = false } = {}) {
-  const versions = Object.keys(DECKS).filter((v) => replay ? v === VERSION : vnum(v) > vnum(from)).sort((a, b) => vnum(a) - vnum(b));
+  const all = Object.keys(DECKS).filter((v) => vnum(v) <= vnum(VERSION)).sort((a, b) => vnum(a) - vnum(b));
+  const versions = replay ? all.slice(-1) : all.filter((v) => vnum(v) > vnum(from));
   const slides = versions.flatMap((v) => DECKS[v]());
   const done = () => update((s) => { s.app = { ...(s.app || {}), seen: VERSION }; });
   if (!slides.length) return done();

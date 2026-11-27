@@ -13,6 +13,7 @@ import { runOnboarding } from './onboarding.js';
 import { openEventForm, openEvent } from './events.js';
 import { tick } from './notify.js';
 import { closeAllSheets } from './ui.js';
+import { reduceMotion } from './util.js';
 import { applyTheme } from './profile.js';
 
 const TABS = [
@@ -43,7 +44,7 @@ function shell() {
 
   $('.nav').addEventListener('click', (e) => {
     const t = e.target.closest('[data-tab]');
-    if (t) switchTab(t.dataset.tab);
+    if (t) switchTab(t.dataset.tab, { dir: Math.sign(NAV.indexOf(t.dataset.tab) - NAV.indexOf(current)) });
   });
   $('#navAdd').addEventListener('click', () => {
     haptic(10);
@@ -75,7 +76,46 @@ function moveIndicator(id, animate = true, fromId) {
   ind.style.right = right + 'px';
 }
 
-function switchTab(id, { silent = false } = {}) {
+/* ---------- swipe left / right to move between the menu sections ---------- */
+const NAV = ['home', 'trackers', 'money', 'pulse'];
+// places where a horizontal swipe already means something else
+const OWN_SWIPE = '.cal, .chips.scroll, .mood-row, .sx-row, .swr, .wd-pick, input, textarea, .nav, .seg';
+function bindTabSwipe() {
+  let x0 = null, y0 = 0, t0 = 0;
+  document.addEventListener('touchstart', (e) => {
+    x0 = null;
+    if (e.touches.length !== 1) return;
+    if (document.querySelector('.sheet.on, .sx, .ob, .menu')) return;
+    const t = e.touches[0];
+    // leave the screen edges to the system
+    if (t.clientX < 24 || t.clientX > window.innerWidth - 24) return;
+    if (e.target.closest(OWN_SWIPE)) return;
+    x0 = t.clientX; y0 = t.clientY; t0 = Date.now();
+  }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (x0 === null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0, dy = t.clientY - y0;
+    x0 = null;
+    if (Date.now() - t0 > 700 || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    if (current === 'profile') { if (dx > 0) switchTab('home', { dir: -1 }); return; }
+    const i = NAV.indexOf(current) + (dx < 0 ? 1 : -1);
+    if (i >= 0 && i < NAV.length) switchTab(NAV[i], { dir: dx < 0 ? 1 : -1 });
+  }, { passive: true });
+}
+
+/* ---------- keep the swipe history clean ----------
+   iPhone treats an edge swipe as back/forward. An anchor entry means there is never
+   a "forward" page to land on, and "back" just closes the top sheet. */
+function anchorHistory() {
+  try { history.pushState({ planik: 1 }, '', location.pathname); } catch (e) { return; }
+  window.addEventListener('popstate', () => {
+    closeAllSheets();
+    try { history.pushState({ planik: 1 }, '', location.pathname); } catch (e) { /* ignore */ }
+  });
+}
+
+function switchTab(id, { silent = false, dir = 0 } = {}) {
   if (id === current) {
     if (id === 'home') { import('./calendar.js').then((m) => m.goToday()); }
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -89,6 +129,8 @@ function switchTab(id, { silent = false } = {}) {
   });
   TABS.forEach((t) => { $('#s-' + t.id).hidden = t.id !== id; });
   TABS.find((t) => t.id === id).render();
+  const scr = $('#s-' + id);
+  if (dir && !reduceMotion()) { scr.classList.remove('in-l', 'in-r'); void scr.offsetWidth; scr.classList.add(dir > 0 ? 'in-r' : 'in-l'); }
   window.scrollTo({ top: 0 });
   moveIndicator(id, true, from);
 }
@@ -148,6 +190,8 @@ function start() {
   window.addEventListener('hashchange', openFromHash);
   window.addEventListener('planik:tab', (e) => switchTab(e.detail));
   registerSW();
+  bindTabSwipe();
+  anchorHistory();
 }
 
 start();

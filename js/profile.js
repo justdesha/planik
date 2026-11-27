@@ -2,10 +2,10 @@
 import { esc, inWords, uid, haptic } from './util.js';
 import { getState, update, REMIND_CHOICES, exportState, importState, resetAll, PALETTE } from './store.js';
 import { ui, sticker, STICKER_ORDER } from './icons.js';
-import { openSheet, ask, toast, toggle, segIndicator } from './ui.js';
+import { openSheet, ask, toast, toggle, segIndicator, saveFile } from './ui.js';
 import { askPermission, notifState, isStandalone, updateBadge } from './notify.js';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.1';
 
 /** resolve "auto" against the phone setting and paint the theme */
 export function applyTheme() {
@@ -105,12 +105,9 @@ export function mountProfile(el, { restartOnboarding }) {
       toast(r === 'granted' ? 'Сповіщення увімкнено' : r === 'denied' ? 'Дозвіл вимкнено в Параметрах iPhone' : 'Спершу додай Planik на початковий екран');
       updateBadge(); renderProfile();
     } else if (a === 'export') {
-      const blob = new Blob([exportState()], { type: 'application/json' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `planik-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.append(link); link.click(); link.remove();
-      toast('Копію збережено у Файли');
+      const r = await saveFile(`planik-backup-${new Date().toISOString().slice(0, 10)}.json`, exportState(), 'application/json');
+      if (r === 'shared') toast('Копію передано'); else if (r === 'downloaded') toast('Копію збережено');
+      else if (r === 'fail') toast('Не вдалося зберегти копію');
     } else if (a === 'import') {
       const inp = document.createElement('input');
       inp.type = 'file'; inp.accept = 'application/json,.json';

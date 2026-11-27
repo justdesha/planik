@@ -138,3 +138,22 @@ export function segIndicator(seg) {
 
 /** toggle switch html */
 export const toggle = (name, on, cls = '') => `<span class="tgl ${cls}" role="switch" aria-checked="${!!on}" data-tgl="${name}"></span>`;
+
+/**
+ * Hand a file to the person without leaving the app.
+ * In an iPhone home-screen app a download link opens the file as a page of raw text
+ * and leaves it in the swipe history, so the share sheet comes first.
+ */
+export async function saveFile(name, text, type) {
+  const file = new File([text], name, { type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return 'shared'; }
+    catch (e) { return e && e.name === 'AbortError' ? 'cancel' : 'fail'; }
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.rel = 'noopener';
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return 'downloaded';
+}

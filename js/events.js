@@ -2,7 +2,7 @@
 import { esc, uid, todayYmd, humanDate, inWords, pad, parseYmd, ymd, MONTHS_GEN, haptic, plural } from './util.js';
 import { getState, saveEvent, deleteEvent, eventById, catById, colorOf, isDone, toggleDone, reminderOffsets, REMIND_CHOICES, occTime, update } from './store.js';
 import { ui, sticker } from './icons.js';
-import { openSheet, ask, toast, segIndicator, toggle } from './ui.js';
+import { openSheet, ask, toast, segIndicator, toggle, saveFile } from './ui.js';
 
 const REPEATS = [
   ['none', 'Не повторювати'], ['daily', 'Щодня'], ['days', 'Обрані дні'], ['weekdays', 'По буднях'], ['weekly', 'Щотижня'],
@@ -346,12 +346,11 @@ function downloadIcs(ev) {
   if (ev.notes) lines.push(`DESCRIPTION:${icsText(ev.notes)}`);
   for (const m of reminderOffsets(ev)) lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsText(ev.title)}`, `TRIGGER:-PT${m}M`, 'END:VALARM');
   lines.push('END:VEVENT', 'END:VCALENDAR');
-  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = (ev.title || 'planik').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0, 40) + '.ics';
-  document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  toast('Відкрий файл, щоб додати в Календар');
+  const name = (ev.title || 'planik').replace(/[^\p{L}\p{N} _-]/gu, '').slice(0, 40) + '.ics';
+  saveFile(name, lines.join('\r\n'), 'text/calendar').then((r) => {
+    if (r === 'shared') toast('Готово');
+    else if (r === 'downloaded') toast('Відкрий файл, щоб додати в Календар');
+    else if (r === 'fail') toast('Не вдалося передати файл');
+  });
 }
 const icsText = (s) => String(s).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
