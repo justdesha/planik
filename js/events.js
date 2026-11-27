@@ -1,8 +1,10 @@
 // Event builder, event details, shared event row markup.
 import { esc, uid, todayYmd, humanDate, inWords, pad, parseYmd, ymd, MONTHS_GEN, haptic, plural } from './util.js';
-import { getState, saveEvent, deleteEvent, eventById, catById, colorOf, isDone, toggleDone, reminderOffsets, REMIND_CHOICES, occTime, update } from './store.js';
+import { getState, saveEvent, deleteEvent, eventById, catById, colorOf, isDone, toggleDone, reminderOffsets, REMIND_CHOICES, occTime, update, occStatus, STATUS_LABEL, toggleCancel } from './store.js';
 import { ui, sticker } from './icons.js';
 import { openSheet, ask, toast, segIndicator, toggle, saveFile } from './ui.js';
+import { fmt as fmtMoney, recordBuy } from './money.js';
+const currency = () => (getState().money && getState().money.cur) || '₴';
 
 const REPEATS = [
   ['none', 'Не повторювати'], ['daily', 'Щодня'], ['days', 'Обрані дні'], ['weekdays', 'По буднях'], ['weekly', 'Щотижня'],
@@ -42,23 +44,54 @@ function ageText(ev, date) {
 }
 
 /** Card-style row used in the day agenda, timeline and pulse */
+const leftText = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m < 60 ? `ще ${m} хв` : `ще ${Math.floor(m / 60)} год${m % 60 ? ' ' + (m % 60) + ' хв' : ''}`; };
+
+/** small status chip for a row (planned rows stay clean) */
+export function statusChip(st) {
+  if (st.id === 'active') return `<span class="tag now"><i></i>В процесі</span>`;
+  if (st.id === 'past') return '<span class="tag st-past">Завершено</span>';
+  if (st.id === 'cancelled') return '<span class="tag st-cx">Скасовано</span>';
+  return '';
+}
+
 export function eventRow({ ev, date }, { showDate = false } = {}) {
   const done = isDone(ev, date);
+  const st = occStatus(ev, date);
   const color = colorOf(ev);
   const meta = [];
   if (showDate) meta.push(humanDate(date));
   meta.push(`${ui('clock')}${timeLabel(ev)}`);
+  if (st.id === 'active') meta.push(`<span data-left>${leftText(st.e - Date.now())}</span>`);
   if (ev.place) meta.push(`${ui('place')}${esc(ev.place)}`);
   const age = ageText(ev, date);
   if (age) meta.push(`виповнюється ${age}`);
   const open = (ev.checklist || []).filter((c) => !c.done).length;
-  if (open) meta.push(`${ui('bag')}${open}`);
-  return `<div class="ev ${done ? 'done' : ''}" data-open="${ev.id}" data-date="${date}" role="button" tabindex="0">
+  if (open && st.id !== 'cancelled') meta.push(`${ui('bag')}${open}`);
+  const cls = ['ev', done ? 'done' : '', st.id === 'past' ? 'past' : '', st.id === 'cancelled' ? 'cancelled' : '', st.id === 'active' ? 'active' : ''].join(' ');
+  return `<div class="${cls}" data-open="${ev.id}" data-date="${date}" role="button" tabindex="0">
+    ${st.id === 'active' ? `<span class="ev-now" data-live data-s="${st.s.getTime()}" data-e="${st.e.getTime()}" style="--p:${st.p.toFixed(4)}" aria-hidden="true"><i></i></span>` : ''}
     <span class="sb c-${color}">${sticker(evIcon(ev))}</span>
     <span class="body"><span class="t">${esc(ev.title)}</span>
-      <span class="m">${ev.important ? '<span class="tag red">Важливо</span>' : ''}${meta.map((m) => `<span>${m}</span>`).join('')}</span></span>
-    ${ev.kind === 'task' ? `<button class="check ${done ? 'on' : ''}" data-done="${ev.id}" data-date="${date}" aria-label="${done ? 'Повернути в роботу' : 'Позначити виконаним'}">${ui('check')}</button>` : ''}
+      <span class="m">${statusChip(st)}${ev.important && st.id !== 'cancelled' ? '<span class="tag red">Важливо</span>' : ''}${meta.map((m) => `<span>${m}</span>`).join('')}</span></span>
+    ${ev.kind === 'task' && st.id !== 'cancelled' ? `<button class="check ${done ? 'on' : ''}" data-done="${ev.id}" data-date="${date}" aria-label="${done ? 'Повернути в роботу' : 'Позначити виконаним'}">${ui('check')}</button>` : ''}
   </div>`;
+}
+
+/**
+ * Keep "В процесі" rows alive: move the progress line, update "ще N хв",
+ * and ask for a redraw once something ends.
+ */
+export function liveTick(redraw) {
+  const now = Date.now();
+  let ended = false;
+  document.querySelectorAll('[data-live]').forEach((el) => {
+    const s = +el.dataset.s, e = +el.dataset.e;
+    if (now >= e) { ended = true; return; }
+    el.style.setProperty('--p', ((now - s) / (e - s)).toFixed(4));
+    const left = el.parentElement.querySelector('[data-left]');
+    if (left) left.textContent = leftText(e - now);
+  });
+  if (ended && redraw) redraw();
 }
 
 /** wire clicks for rows inside a container */
@@ -101,6 +134,7 @@ export function openEvent(id, date, rerender) {
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="sb" style="background:rgba(255,255,255,.22);--cut:transparent;color:inherit">${sticker(evIcon(ev))}</span>
         <span class="tag" style="background:rgba(255,255,255,.28);color:inherit">${ev.kind === 'birthday' ? 'День народження' : esc(cat.name)}</span>
+        ${(() => { const stt = occStatus(ev, date); return stt.id !== 'none' ? `<span class="tag det-st st-${stt.id}" style="background:rgba(255,255,255,.28);color:inherit">${stt.id === 'active' ? '<i></i>' : ''}${STATUS_LABEL[stt.id]}</span>` : ''; })()}
         ${ev.important && color !== 'red' ? '<span class="tag red">Важливо</span>' : ''}
         ${ev.important && color === 'red' ? '<span class="tag" style="background:rgba(255,255,255,.28);color:inherit">Особливо важливо</span>' : ''}
       </div>
@@ -111,11 +145,19 @@ export function openEvent(id, date, rerender) {
       ${(ev.kind === 'birthday' ? 'yearly' : ev.repeat) !== 'none' && (ev.repeat || ev.kind === 'birthday') ? `<div class="det-row">${ui('repeat')}<div>${repeatText(ev)}${ev.until ? `, до ${humanDate(ev.until)}` : ''}</div></div>` : ''}
       <div class="det-row">${ui('bell')}<div>${rem.length ? rem.map((m) => m === 0 ? 'у момент події' : 'за ' + inWords(m)).join(', ') : 'Без нагадувань'}</div></div>
       ${ev.place ? `<div class="det-row">${ui('place')}<div>${esc(ev.place)}</div></div>` : ''}
+      ${ev.amount ? `<div class="det-row">${ui('bag')}<div>${(ev.bought || {})[date] ? 'Куплено, записано в «Гроші»' : `Сума покупки: ${fmtMoney(ev.amount)}`}</div></div>` : ''}
       ${ev.notes ? `<div class="det-row">${ui('note')}<div style="white-space:pre-wrap;-webkit-user-select:text;user-select:text">${esc(ev.notes)}</div></div>` : ''}
     </div>
     ${cl.length ? `<div class="card"><div class="card-h"><h3 class="h3">Підготувати й купити</h3><span class="small muted">${cl.filter((c) => c.done).length} з ${cl.length}</span></div>
       ${cl.map((c) => `<button class="cl-item ${c.done ? 'on' : ''}" data-cl="${c.id}"><span class="cl-box">${ui('check')}</span><span class="cl-t">${esc(c.text)}</span></button>`).join('')}</div>` : ''}
+    ${ev.amount && !(ev.bought || {})[date] ? `<button class="btn btn-deep btn-block" data-act="buy" style="margin-bottom:10px">${ui('bag')}Куплено — записати витрату</button>` : ''}
     ${ev.kind === 'task' ? `<button class="btn ${done ? 'btn-sand' : 'btn-acc'} btn-block" data-act="done" style="margin-bottom:10px">${ui('check')}${done ? 'Повернути в роботу' : 'Позначити виконаним'}</button>` : ''}
+    ${(() => {
+      const stt = occStatus(ev, date);
+      if (stt.id === 'cancelled') return `<button class="btn btn-sand btn-block" data-act="cancel" style="margin-bottom:10px">${ui('repeat')}Відновити подію</button>`;
+      if (ev.kind !== 'birthday' && !['past', 'done', 'missed'].includes(stt.id)) return `<button class="btn btn-ghost btn-block" data-act="cancel" style="margin-bottom:10px">${ui('close')}Скасувати${(ev.repeat && ev.repeat !== 'none') ? ' цей день' : ''}</button>`;
+      return '';
+    })()}
     <div class="det-actions">
       <button class="btn btn-ink" data-act="edit">${ui('edit')}Змінити</button>
       <button class="ibtn" data-act="ics" aria-label="Додати в Календар iPhone" style="width:54px;height:54px">${ui('download')}</button>
@@ -144,6 +186,14 @@ export function openEvent(id, date, rerender) {
         } else if (act === 'edit') {
           s.close();
           setTimeout(() => openEventForm({ ev, onSaved: rerender }), 200);
+        } else if (act === 'cancel') {
+          const was = occStatus(ev, date).id === 'cancelled';
+          toggleCancel(ev.id, date); haptic(12);
+          s.setHtml(render()); rerender && rerender();
+          if (!was) toast((ev.repeat && ev.repeat !== 'none') ? 'Скасовано лише цей день' : 'Подію скасовано. Вона лишиться в календарі', { action: 'Повернути', onAction: () => { toggleCancel(ev.id, date); rerender && rerender(); } });
+        } else if (act === 'buy') {
+          s.close();
+          setTimeout(() => recordBuy(ev.id, date, rerender), 250);
         } else if (act === 'ics') {
           downloadIcs(ev);
         } else if (act === 'del') {
@@ -214,6 +264,9 @@ export function openEventForm({ ev: existing, date, kind, preset, onSaved } = {}
     <div class="field"><span class="lbl">Нагадати</span><div class="chips">
       ${remChoices().map((m) => `<button type="button" class="chip" data-rem="${m}" aria-pressed="${remCurrent().includes(m)}">${m === 0 ? (bd ? 'У день' : 'Вчасно') : 'за ' + inWords(m)}</button>`).join('')}
     </div>${customRemind ? '' : '<p class="tiny muted" style="margin:8px 4px 0">Стоїть як у налаштуваннях. Можна змінити саме для цієї події.</p>'}</div>
+    ${!bd && ev.cat === 'buy' ? `<div class="field"><span class="lbl">Сума покупки — за бажанням</span>
+      <div class="amt-line"><input class="inp" id="fAmount" inputmode="decimal" placeholder="0" value="${ev.amount || ''}" autocomplete="off"><span>${esc(currency())}</span></div>
+      <p class="tiny muted" style="margin:8px 4px 0">Покупка зʼявиться в «Грошах» у запланованих, а коли купиш — запишеш її витратою одним тапом.</p></div>` : ''}
     ${bd ? '' : `<div class="field"><span class="lbl">Місце</span><input class="inp" id="fPlace" placeholder="Адреса або назва" value="${esc(ev.place)}" autocomplete="off"></div>`}
     <div class="field"><span class="lbl">${bd ? 'Подарунок і підготовка' : 'Що підготувати або купити'}</span>
       <div id="clList">${(ev.checklist || []).map(clRow).join('')}</div>
@@ -234,6 +287,7 @@ export function openEventForm({ ev: existing, date, kind, preset, onSaved } = {}
     if (v('fUntil') !== undefined) ev.until = v('fUntil');
     if (v('fPlace') !== undefined) ev.place = v('fPlace').trim();
     if (v('fNotes') !== undefined) ev.notes = v('fNotes');
+    if (v('fAmount') !== undefined) { const a = parseFloat(String(v('fAmount')).replace(/\s/g, '').replace(',', '.')); ev.amount = isFinite(a) && a > 0 ? Math.round(a * 100) / 100 : 0; }
   };
 
   openSheet({
@@ -307,6 +361,7 @@ export function openEventForm({ ev: existing, date, kind, preset, onSaved } = {}
         if (ev.repeat === 'none') ev.until = '';
         if (ev.repeat === 'days') { if (!(ev.days || []).length) ev.days = [wdOf(ev.date)]; } else delete ev.days;
         if (!customRemind) ev.remind = null;
+        if (ev.cat !== 'buy' || ev.kind === 'birthday' || !ev.amount) delete ev.amount;
         ev.birthYear = ev.birthYear ? Number(ev.birthYear) : '';
         saveEvent(ev);
         haptic(15);

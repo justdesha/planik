@@ -63,12 +63,18 @@ export function fmt(n, { sign = false, cur = true } = {}) {
 const num = (v) => { const x = parseFloat(String(v).replace(/\s/g, '').replace(',', '.')); return isFinite(x) ? Math.round(x * 100) / 100 : 0; };
 const monthKey = (d) => d.slice(0, 7);
 
-export function periodOps(from, to, t) { return (M().ops || []).filter((o) => o.d >= from && o.d <= to && (!t || o.t === t)); }
+/** operations that already happened (a future date = planned, not counted yet) */
+export function periodOps(from, to, t) { const top = to < todayYmd() ? to : todayYmd(); return (M().ops || []).filter((o) => o.d >= from && o.d <= top && (!t || o.t === t)); }
+/** operations dated after today, up to a day */
+export const futureOps = (to = '9999-12-31') => (M().ops || []).filter((o) => o.d > todayYmd() && o.d <= to && o.t !== 'jar');
+const isFuture = (o) => o.d > todayYmd();
 export function sumOps(list) { return list.reduce((a, o) => a + o.a, 0); }
 export function balance() {
   const m = M();
   let b = m.start || 0;
-  for (const o of m.ops) b += o.t === 'inc' ? o.a : o.t === 'exp' ? -o.a : -o.a; // jar: + into jar, − out of jar
+  const today = todayYmd();
+  // planned (future) operations count only from their own day
+  for (const o of m.ops) { if (o.d > today) continue; b += o.t === 'inc' ? o.a : -o.a; } // jar: + into jar, − out of jar
   return b;
 }
 export function byCat(list, t) {
@@ -88,6 +94,12 @@ export function mountMoney(el) {
   root = el;
   root.addEventListener('click', onClick);
   window.addEventListener('planik:paid', (e) => payFromCalendar(e.detail.rec, e.detail.date));
+  // a planned purchase ticked in the calendar: offer to record it
+  window.addEventListener('planik:bought', (e) => {
+    const ev = eventById(e.detail.id);
+    if (!ev || (ev.bought || {})[e.detail.date]) return;
+    setTimeout(() => toast(`Записати витрату «${ev.title}» · ${fmt(ev.amount)}?`, { action: 'Записати', ms: 5000, onAction: () => recordBuy(ev.id, e.detail.date, e.detail.after) }), 2700);
+  });
 }
 
 function onClick(e) {
@@ -111,6 +123,7 @@ function onClick(e) {
   else if (a === 'pay') payRec(b.dataset.id, b.dataset.d);
   else if (a === 'jar') openJar(b.dataset.id ? M().jars.find((j) => j.id === b.dataset.id) : null);
   else if (a === 'buy') recordPurchase(b.dataset.ev, b.dataset.item);
+  else if (a === 'bought') recordBuy(b.dataset.ev, b.dataset.d);
   else if (a === 'buyskip') { markItem(b.dataset.ev, b.dataset.item, 'skip'); render(); }
 }
 
@@ -137,6 +150,7 @@ function render() {
         : `<p class="bal-num ${bal < 0 ? 'neg' : ''}">${fmt(bal)}</p>`}
       <div class="bal-month"><span class="mon-sw"><button data-m="prev" aria-label="Попередній місяць">${ui('left')}</button><b>${MONTHS[month.getMonth()]}</b><button data-m="next" aria-label="Наступний місяць">${ui('right')}</button></span>
         <span class="bal-io"><i class="up">+${fmt(sumOps(inc), { cur: false })}</i><i class="dn">−${fmt(sumOps(exp), { cur: false })}</i></span></div>
+      ${projection(bal)}
       <span class="bal-halves" aria-hidden="true"><i></i><i></i></span>
     </section>
     <div class="m-actions"><button class="btn btn-acc" data-m="exp">${ui('minus')}Витрата</button><button class="btn btn-deep" data-m="inc">${ui('plus')}Дохід</button></div>
@@ -148,6 +162,7 @@ function render() {
         <div class="two" style="margin-top:12px"><button class="btn btn-sand btn-sm" data-m="allcats">${ui('grid')}Категорії</button><button class="btn btn-sand btn-sm" data-m="all">${ui('list')}Усі ${kind === 'exp' ? 'витрати' : 'доходи'}</button></div>` : ''}
     </section>
 
+    ${plannedCard()}
     ${limitsCard(exp)}
     ${recsCard()}
     ${jarsCard()}
@@ -324,12 +339,75 @@ function payFromCalendar(id, date) { payRec(id, date, { fromCalendar: true }); }
 const JAR_COLORS = ['butter', 'peach', 'sky', 'tangerine', 'cobalt', 'navy'];
 function jarsCard() {
   const jars = M().jars || [];
-  return `<section class="card"><div class="card-h"><div><h3 class="h3">Скарбнички</h3><span class="small muted">${jars.length ? `відкладено ${fmt(jars.reduce((a, j) => a + j.saved, 0))}` : 'цілі, на які збираєш'}</span></div><button class="btn btn-sand btn-sm" data-m="jar">${ui('plus')}Нова</button></div>
-    ${jars.length ? `<div class="jars">${jars.map((j) => {
+  // before the first jar: a card that explains the idea
+  if (!jars.length) return `<section class="card"><div class="card-h"><div><h3 class="h3">Скарбнички</h3><span class="small muted">цілі, на які збираєш</span></div><button class="btn btn-sand btn-sm" data-m="jar">${ui('plus')}Нова</button></div>
+    <p class="small muted" style="margin:0">Відпустка, ноутбук, подушка безпеки. Гроші в скарбничці не рахуються як витрата, але й не висять на рахунку.</p></section>`;
+  // afterwards: just a title and a row of jars on the app background, "+" at the end
+  return `<section class="jars-sec"><div class="sec-h"><h3 class="h3">Скарбнички</h3><span class="small muted">відкладено ${fmt(jars.reduce((a, j) => a + j.saved, 0))}</span></div>
+    <div class="jars-row">${jars.map((j) => {
       const p = j.goal ? Math.min(1, j.saved / j.goal) : 0;
       return `<button class="jar c-${j.color}" data-m="jar" data-id="${j.id}" style="--p:${p * 100}"><span class="jar-ring"><span class="sb c-${j.color}">${sticker(j.icon || 'piggy')}</span></span>
         <b>${esc(j.name)}</b><span>${fmt(j.saved, { cur: false })}${j.goal ? ` з ${fmt(j.goal)}` : ` ${esc(M().cur)}`}</span>${j.goal ? `<i class="jar-p">${Math.round(p * 100)} %</i>` : ''}</button>`;
-    }).join('')}</div>` : '<p class="small muted" style="margin:0">Відпустка, ноутбук, подушка безпеки. Гроші в скарбничці не рахуються як витрата, але й не висять на рахунку.</p>'}</section>`;
+    }).join('')}<button class="jar jar-add" data-m="jar" aria-label="Нова скарбничка"><span>${ui('plus')}</span><b>Нова</b></button></div></section>`;
+}
+
+/* ---------------- purchases planned in the calendar ---------------- */
+/** "Покупки" events with an amount in the viewed month */
+function plannedBuys() {
+  return occurrences(mFrom(), mTo(), (ev) => ev.cat === 'buy' && ev.amount > 0)
+    .map(({ ev, date }) => ({ ev, date, op: (ev.bought || {})[date] }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+export const plannedLeft = () => plannedBuys().filter((x) => !x.op).reduce((a, x) => a + x.ev.amount, 0);
+
+/** balance at the end of the viewed month, counting what is planned */
+function projection(bal) {
+  if (mTo() < todayYmd()) return '';
+  const fut = futureOps(mTo());
+  const delta = fut.reduce((a, o) => a + (o.t === 'inc' ? o.a : -o.a), 0) - plannedLeft();
+  if (!fut.length && !plannedLeft()) return '';
+  return `<p class="bal-plan">${ui('calendar')}з урахуванням запланованого на кінець ${MONTHS_GEN[month.getMonth()]} буде <b>${fmt(bal + delta)}</b></p>`;
+}
+
+function plannedCard() {
+  const buys = plannedBuys();
+  const ops = futureOps(mTo()).filter((o) => o.d >= mFrom()).sort((a, b) => a.d.localeCompare(b.d));
+  if (!buys.length && !ops.length) return '';
+  const inc = ops.filter((o) => o.t === 'inc').reduce((a, o) => a + o.a, 0);
+  const exp = ops.filter((o) => o.t === 'exp').reduce((a, o) => a + o.a, 0) + buys.filter((x) => !x.op).reduce((a, x) => a + x.ev.amount, 0);
+  const rows = [
+    ...ops.map((o) => ({ d: o.d, html: `<div class="rec"><button class="rec-main" data-m="op" data-id="${o.id}"><span class="sb sm ${o.t === 'inc' ? 'c-cobalt' : 'c-sand'}">${sticker(mcat(o.t, o.cat).icon)}</span>
+        <span class="grow"><b>${esc(o.note || mcat(o.t, o.cat).name)}</b><span>${parseYmd(o.d).getDate()} ${MONTHS_GEN[parseYmd(o.d).getMonth()]} · ${esc(mcat(o.t, o.cat).name)}</span></span></button>
+        <span class="op-a ${o.t === 'inc' ? 'up' : ''}">${fmt(o.t === 'inc' ? o.a : -o.a, { sign: o.t === 'inc' })}</span></div>` })),
+    ...buys.map(({ ev, date, op }) => {
+      const o = op && M().ops.find((x) => x.id === op);
+      const late = !op && date < todayYmd();
+      return { d: date, html: `<div class="rec ${op ? 'bought' : ''}"><div class="rec-main"><span class="sb sm c-sand">${sticker('bag')}</span>
+        <span class="grow"><b>${esc(ev.title)}</b><span>${parseYmd(date).getDate()} ${MONTHS_GEN[parseYmd(date).getMonth()]} · ${op && o ? `куплено за ${fmt(o.a)}` : `покупка, план ${fmt(ev.amount)}`}</span></span></div>
+        ${op ? `<span class="pill-when">${ui('check')}</span>` : `<button class="pill-when ${late ? 'hot' : ''}" data-m="bought" data-ev="${ev.id}" data-d="${date}">Куплено</button>`}</div>` };
+    })
+  ].sort((a, b) => a.d.localeCompare(b.d));
+  return `<section class="card"><div class="card-h"><div><h3 class="h3">Заплановано</h3><span class="small muted">${[inc ? `+${fmt(inc)}` : '', exp ? `−${fmt(exp)}` : ''].filter(Boolean).join(' · ') || 'усе вже сталося'}</span></div></div>
+    ${rows.map((r) => r.html).join('')}
+    <p class="tiny muted" style="margin:10px 2px 0">Заплановане додасться до рахунку або спишеться в свій день.</p></section>`;
+}
+
+/** record a planned purchase as a real expense (amount can be changed before saving) */
+export function recordBuy(evId, date, after) {
+  const ev = eventById(evId);
+  if (!ev || (ev.bought || {})[date]) return;
+  openOp({
+    t: 'exp',
+    preset: { a: ev.amount || '', cat: guessCat(ev, ev.title), note: ev.title, d: date > todayYmd() ? todayYmd() : date },
+    onSaved: (op) => {
+      update((st) => {
+        const e = st.events.find((x) => x.id === evId); if (!e) return;
+        e.bought = e.bought || {}; e.bought[date] = op.id;
+        if (e.kind === 'task') { e.doneDates = e.doneDates || []; if (!e.doneDates.includes(date)) e.doneDates.push(date); }
+      });
+      render(); after && after();
+    }
+  });
 }
 
 function openJar(j) {
@@ -417,12 +495,12 @@ const opRow = (o) => {
   const amt = o.t === 'inc' ? o.a : -o.a;
   return `<div class="swr" data-op="${o.id}"><button class="swr-del" data-opdel="${o.id}">${ui('trash')}Видалити</button>
     <button class="op-row" data-m="op" data-id="${o.id}" ${o.t === 'jar' ? 'disabled' : ''}><span class="sb sm ${o.t === 'inc' ? 'c-cobalt' : o.t === 'jar' ? 'c-butter' : 'c-sand'}">${sticker(c.icon)}</span>
-    <span class="grow"><b>${esc(o.t === 'jar' ? c.name : (o.note || c.name))}</b><span>${o.t === 'jar' ? 'переказ' : esc(o.note ? c.name : humanDate(o.d))}${o.rec ? ' · регулярний' : ''}</span></span>
+    <span class="grow"><b>${esc(o.t === 'jar' ? c.name : (o.note || c.name))}</b><span>${isFuture(o) ? '<i class="plan-tag">заплановано</i>' : ''}${o.t === 'jar' ? 'переказ' : esc(o.note ? c.name : humanDate(o.d))}${o.rec ? ' · регулярний' : ''}</span></span>
     <span class="op-a ${o.t === 'inc' ? 'up' : ''}">${fmt(amt, { sign: o.t === 'inc' })}</span></button></div>`;
 };
 
 function historyCard() {
-  const ops = [...M().ops].filter((o) => o.t !== 'jar').sort((a, b) => b.d.localeCompare(a.d) || b.ts - a.ts).slice(0, 5);
+  const ops = [...M().ops].filter((o) => o.t !== 'jar' && !isFuture(o)).sort((a, b) => b.d.localeCompare(a.d) || b.ts - a.ts).slice(0, 5);
   return `<section class="card"><div class="card-h"><h3 class="h3">Останні операції</h3>${ops.length ? '<button class="btn btn-sand btn-sm" data-m="hist">Усі</button>' : ''}</div>
     ${ops.length ? `<div class="ops">${ops.map(opRow).join('')}</div>` : '<p class="small muted" style="margin:0">Тут будуть усі витрати й доходи. Тап — змінити, свайп ліворуч — видалити.</p>'}</section>`;
 }
@@ -433,7 +511,7 @@ function groupedOps(list) {
   return [...by.entries()].map(([d, os]) => {
     const net = os.reduce((a, o) => a + (o.t === 'inc' ? o.a : o.t === 'exp' ? -o.a : 0), 0);
     const dt = parseYmd(d);
-    return `<div class="op-day"><div class="op-day-h"><b>${humanDate(d, { withWeekday: true })}</b><span>${net ? fmt(net, { sign: true }) : ''}</span></div><div class="ops">${os.map(opRow).join('')}</div></div>`;
+    return `<div class="op-day ${d > todayYmd() ? 'future' : ''}"><div class="op-day-h"><b>${humanDate(d, { withWeekday: true })}${d > todayYmd() ? ' · заплановано' : ''}</b><span>${net ? fmt(net, { sign: true }) : ''}</span></div><div class="ops">${os.map(opRow).join('')}</div></div>`;
   }).join('');
 }
 
@@ -443,8 +521,9 @@ export function openHistory({ t = '', cat = '' } = {}) {
     && (!q || `${o.note || ''} ${o.t === 'jar' ? '' : mcat(o.t, o.cat).name} ${o.a}`.toLowerCase().includes(q)));
   const results = () => {
     const l = list();
-    const tot = l.reduce((a, o) => a + (o.t === 'inc' ? o.a : -o.a), 0);
-    return l.length ? `<p class="small muted" style="margin:0 4px 10px">${l.length} ${plural(l.length, 'операція', 'операції', 'операцій')} · разом ${fmt(tot, { sign: true })}</p>${groupedOps(l)}`
+    const tot = l.filter((o) => !isFuture(o)).reduce((a, o) => a + (o.t === 'inc' ? o.a : -o.a), 0);
+    const nf = l.filter(isFuture).length;
+    return l.length ? `<p class="small muted" style="margin:0 4px 10px">${l.length} ${plural(l.length, 'операція', 'операції', 'операцій')} · разом ${fmt(tot, { sign: true })}${nf ? ` · ${nf} ${plural(nf, 'запланована', 'заплановані', 'запланованих')}` : ''}</p>${groupedOps(l)}`
       : `<div class="empty"><p class="h3">Нічого не знайшлося</p><p class="small">Спробуй інше слово або зніми фільтр.</p></div>`;
   };
   const chips = () => `<div class="chips scroll" style="margin-bottom:12px">${[['', 'Усе'], ['exp', 'Витрати'], ['inc', 'Доходи']].map(([k, l]) => `<button class="chip" data-ht="${k}" aria-pressed="${ft === k && !fc}">${l}</button>`).join('')}
@@ -538,8 +617,9 @@ export function openOp({ op, t = 'exp', preset = {}, after, onSaved } = {}) {
     ${isNew ? `<div class="seg" id="oSeg" style="margin-bottom:16px"><button type="button" data-ot="exp" aria-pressed="${x.t === 'exp'}">Витрата</button><button type="button" data-ot="inc" aria-pressed="${x.t === 'inc'}">Дохід</button></div>` : ''}
     <div class="amt ${x.t}"><span>${x.t === 'exp' ? '−' : '+'}</span><input id="oA" inputmode="decimal" placeholder="0" value="${x.a}" autocomplete="off" aria-label="Сума"><em>${esc(M().cur)}</em></div>
     <div class="field"><span class="lbl">Категорія</span>${catGrid(x.t, x.cat, 'data-oc')}</div>
-    <div class="field"><span class="lbl">Коли</span><div class="chips">${dayChip(todayYmd(), 'Сьогодні')}${dayChip(ymd(addDays(new Date(), -1)), 'Вчора')}${dayChip(ymd(addDays(new Date(), -2)), 'Позавчора')}</div>
-      <input class="inp" type="date" id="oD" value="${x.d}" max="${todayYmd()}" style="margin-top:10px"></div>
+    <div class="field"><span class="lbl">Коли</span><div class="chips">${dayChip(ymd(addDays(new Date(), -1)), 'Вчора')}${dayChip(todayYmd(), 'Сьогодні')}${dayChip(ymd(addDays(new Date(), 1)), 'Завтра')}</div>
+      <input class="inp" type="date" id="oD" value="${x.d}" style="margin-top:10px">
+      ${x.d > todayYmd() ? `<p class="plan-note">${ui('calendar')}Заплановано: ${x.t === 'exp' ? 'спишеться' : 'додасться'} ${humanDate(x.d)}, до того рахунок не зміниться.</p>` : ''}</div>
     <div class="field"><span class="lbl">Нотатка</span><input class="inp" id="oN" maxlength="60" placeholder="${x.t === 'exp' ? 'Напр. Albert, кава з Олею' : 'Напр. аванс'}" value="${esc(x.note)}" autocomplete="off"></div>
     ${isNew ? '' : '<button type="button" class="btn btn-ghost btn-sm danger" data-odel>Видалити операцію</button>'}`;
   const read = (s) => { const a = s.body.querySelector('#oA'); if (a) x.a = a.value; x.d = s.body.querySelector('#oD').value || x.d; x.note = s.body.querySelector('#oN').value.trim(); };
@@ -552,6 +632,7 @@ export function openOp({ op, t = 'exp', preset = {}, after, onSaved } = {}) {
       const rer = () => { read(s); const top = s.body.scrollTop; s.setHtml(body()); s.body.scrollTop = top; const sg = s.body.querySelector('#oSeg'); sg && segIndicator(sg); };
       requestAnimationFrame(() => { const sg = s.body.querySelector('#oSeg'); sg && segIndicator(sg); });
       if (isNew) setTimeout(() => s.body.querySelector('#oA').focus({ preventScroll: true }), 420);
+      s.body.addEventListener('change', (e) => { if (e.target.id === 'oD') rer(); });
       s.body.addEventListener('click', async (e) => {
         const b = e.target.closest('button'); if (!b) return;
         if (b.dataset.ot) { x.t = b.dataset.ot; x.cat = x.t === 'inc' ? 'salary' : 'groceries'; s.el.querySelector('.sheet-head .h2').textContent = x.t === 'exp' ? 'Нова витрата' : 'Новий дохід'; haptic(); rer(); }
@@ -565,11 +646,12 @@ export function openOp({ op, t = 'exp', preset = {}, after, onSaved } = {}) {
         const a = num(x.a);
         if (a <= 0) { const i = s.body.querySelector('#oA'); i.focus(); haptic(30); return toast('Вкажи суму'); }
         x.a = a;
-        if (x.d > todayYmd()) x.d = todayYmd();
+        if (x.d > todayYmd()) x.plan = true; else if (isNew) delete x.plan;
         update((st) => { const i = st.money.ops.findIndex((o) => o.id === x.id); if (i >= 0) st.money.ops[i] = x; else st.money.ops.push(x); });
         haptic(15); s.close();
-        toast(isNew ? `${x.t === 'exp' ? '−' : '+'}${fmt(a)} · ${mcat(x.t, x.cat).name}` : 'Зміни збережено');
-        if (isNew) limitCheck(x);
+        const future = x.d > todayYmd();
+        toast(future ? `Заплановано на ${humanDate(x.d)}: ${x.t === 'exp' ? '−' : '+'}${fmt(a)}` : isNew ? `${x.t === 'exp' ? '−' : '+'}${fmt(a)} · ${mcat(x.t, x.cat).name}` : 'Зміни збережено');
+        if (isNew && !future) limitCheck(x);
         onSaved && onSaved(x); after && after(); render();
       });
     }
@@ -677,7 +759,12 @@ function guessCat(ev, text) {
 function markItem(evId, itemId, val) {
   update((st) => { const ev = st.events.find((e) => e.id === evId); const it = ev && (ev.checklist || []).find((c) => c.id === itemId); if (it) it.spent = val; });
 }
-function unlinkPurchase(st, opId) { for (const ev of st.events) for (const c of ev.checklist || []) if (c.spent === opId) delete c.spent; }
+function unlinkPurchase(st, opId) {
+  for (const ev of st.events) {
+    for (const c of ev.checklist || []) if (c.spent === opId) delete c.spent;
+    for (const k of Object.keys(ev.bought || {})) if (ev.bought[k] === opId) delete ev.bought[k];
+  }
+}
 export function recordPurchaseExt(evId, itemId, after) { recordPurchase(evId, itemId, after); }
 function recordPurchase(evId, itemId, after) {
   const ev = eventById(evId); const it = ev && (ev.checklist || []).find((c) => c.id === itemId);

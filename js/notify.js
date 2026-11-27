@@ -32,6 +32,12 @@ function describe(it) {
   if (it.type === 'remind') return { icon: 'bolt', color: 'butter', title: it.ev.title, text: `${humanDate(it.date)}${it.ev.start && !it.ev.allDay ? ', ' + it.ev.start : ''} · ${untilText(occTime(it.ev, it.date))}` };
   if (it.type === 'goal') return { icon: 'trophy', color: 'butter', title: `Мета досягнута: ${it.tracker.name}`, text: 'Мету досягнуто. Постав нову або просто порадій.' };
   if (it.type === 'trackerEnd') return { icon: 'target', color: 'peach', title: `Челендж завершено: ${it.tracker.name}`, text: 'Подивись результат у трекерах.' };
+  if (it.type === 'moneyDue') {
+    const o = it.op, cur = (getState().money || {}).cur || '₴';
+    const sum = `${o.t === 'inc' ? '+' : '−'}${Math.round(o.a).toLocaleString('uk-UA').replace(/,/g, ' ')} ${cur}`;
+    return { icon: 'wallet', color: o.t === 'inc' ? 'cobalt' : 'butter', title: `${o.t === 'inc' ? 'Надійшло за планом' : 'Списано за планом'}${o.note ? ': ' + o.note : ''}`, text: `${sum} — тепер це враховано на рахунку.` };
+  }
+  if (it.type === 'wheel') return { icon: 'target', color: 'cobalt', title: 'Колесо балансу чекає', text: 'Місяць добігає кінця. Хвилина, щоб оцінити вісім сфер життя.' };
   return { icon: 'spark', color: 'stone', title: 'Planik', text: '' };
 }
 
@@ -42,7 +48,7 @@ export function openInbox(after) {
     if (!items.length) return `<div class="empty" style="margin-top:6px"><p class="h3">Тут тихо</p><p class="small">Нагадування, протерміновані справи й досягнуті цілі зʼявлятимуться тут.</p></div>`;
     return items.map((it) => {
       const d = describe(it);
-      return `<button class="nt ${read[it.id] ? '' : 'unread'}" data-nid="${it.id}" ${it.ev ? `data-ev="${it.ev.id}" data-d="${it.date}"` : ''}>
+      return `<button class="nt ${read[it.id] ? '' : 'unread'}" data-nid="${it.id}" ${it.ev ? `data-ev="${it.ev.id}" data-d="${it.date}"` : ''} ${it.type === 'wheel' ? 'data-wheel' : ''} ${it.type === 'moneyDue' ? 'data-money' : ''}>
         <span class="sb c-${d.color}">${sticker(d.icon)}</span><span class="grow"><b>${esc(d.title)}</b><span>${esc(d.text)}</span></span></button>`;
     }).join('');
   };
@@ -57,6 +63,8 @@ export function openInbox(after) {
         markRead(b.dataset.nid);
         updateBadge();
         if (b.dataset.ev) { s.close(); setTimeout(() => openEvent(b.dataset.ev, b.dataset.d, after), 200); }
+        else if (b.hasAttribute('data-money')) { s.close(); window.dispatchEvent(new CustomEvent('planik:tab', { detail: 'money' })); }
+        else if (b.hasAttribute('data-wheel')) { s.close(); setTimeout(() => import('./wheel.js').then((m) => m.openWheelEdit(after)), 200); }
         else s.setHtml(render());
         after && after();
       });
@@ -76,7 +84,7 @@ export async function tick(onChange) {
     const reg = await navigator.serviceWorker?.getRegistration();
     for (const it of fresh.slice(0, 3)) {
       const d = describe(it);
-      const opts = { body: d.text, icon: './icons/icon-192.png', badge: './icons/icon-192.png', tag: it.id, data: it.ev ? { eventId: it.ev.id, date: it.date } : {} };
+      const opts = { body: d.text, icon: './icons/icon-192.png', badge: './icons/icon-192.png', tag: it.id, data: it.ev ? { eventId: it.ev.id, date: it.date } : it.type === 'wheel' ? { wheel: 1 } : {} };
       try { reg ? await reg.showNotification(d.title, opts) : new Notification(d.title, opts); } catch (e) { /* not allowed here */ }
     }
   }

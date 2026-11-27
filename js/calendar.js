@@ -1,6 +1,6 @@
 // Home screen: greeting, "important soon" banner and the month in 3 views.
 import { MONTHS, MONTHS_GEN, WEEKDAYS, WD_SHORT, ymd, parseYmd, todayYmd, addDays, addMonths, daysInMonth, wd, esc, untilText, haptic, pDays, diffDays } from './util.js';
-import { getState, update, eventsOn, colorOf, nextImportant, occTime, unreadCount, isDone, occurrences } from './store.js';
+import { getState, update, eventsOn, colorOf, nextImportant, occTime, unreadCount, isDone, occurrences, occStatus } from './store.js';
 import { ui, sticker } from './icons.js';
 import { menu } from './ui.js';
 import { eventRow, bindEventRows, openEvent, openEventForm, timeLabel, evIcon } from './events.js';
@@ -8,6 +8,7 @@ import { openInbox } from './notify.js';
 import { greetingLine, dayMood } from './pulse.js';
 import { freshStory, openStory, periodById } from './stories.js';
 import { checkinHtml, bindCheckin, dayMoodHtml } from './moodui.js';
+import { oracleHomeHtml, dayOracleHtml, bindOracle } from './oracle.js';
 
 const VIEWS = [
   { value: 'grid', label: 'Календар', icon: 'grid' },
@@ -27,6 +28,7 @@ export function mountHome(el) {
   root = el;
   bindEventRows(root, render);
   bindCheckin(root, render);
+  bindOracle(root, render);
   root.addEventListener('click', onClick);
   let x0 = null, y0 = null;
   root.addEventListener('touchstart', (e) => {
@@ -107,6 +109,7 @@ export function render() {
       <button class="ibtn peach" data-a="bell" aria-label="Сповіщення">${ui('bell')}${unread ? `<span class="badge-count">${unread > 9 ? '9+' : unread}</span>` : ''}</button>
     </header>
     ${checkinHtml()}
+    ${oracleHomeHtml()}
     ${imp ? alertHtml(imp) : ''}
     ${storyCard()}
     <div id="homeBody"></div>`;
@@ -173,13 +176,15 @@ function renderGrid(body) {
       <div style="display:flex;gap:8px"><button class="ibtn sm acc" data-a="add" data-d="${selected}" aria-label="Додати на цей день">${ui('plus')}</button>
       <button class="ibtn sm" data-a="expand" aria-label="Показати весь місяць">${ui('up')}</button></div></div>
       ${dayMoodHtml(selected)}
+      ${dayOracleHtml(selected)}
       ${list.length ? `<div class="ev-list">${list.map((o) => eventRow(o)).join('')}</div>`
         : `<div class="empty"><p class="h3">Вільний день</p><p class="small">Можна залишити так. Або запланувати щось приємне.</p><button class="btn btn-ink btn-sm" data-a="add" data-d="${selected}">${ui('plus')}Додати план</button></div>`}
     </section>`;
   } else {
     const from = isCurMonth ? today : ymd(month);
     const to = ymd(addDays(parseYmd(from), 14));
-    const up = occurrences(from, to).filter(({ ev, date }) => !isDone(ev, date) && !(date === today && ev.start && !ev.allDay && occTime(ev, date) < new Date())).slice(0, 5);
+    // upcoming = not done and not over yet; a running event («В процесі») stays on top
+    const up = occurrences(from, to).filter(({ ev, date }) => !isDone(ev, date) && !['past', 'missed'].includes(occStatus(ev, date).id)).slice(0, 5);
     html += `<section class="agenda"><div class="agenda-head"><div><h3 class="h2">Найближче</h3><p>наступні два тижні</p></div></div>
       ${up.length ? `<div class="ev-list">${up.map((o) => eventRow(o, { showDate: true })).join('')}</div>`
         : `<div class="empty"><p class="h3">Поки порожньо</p><p class="small">Натисни на день у календарі або на плюс унизу, щоб додати перший план.</p></div>`}</section>`;
@@ -228,10 +233,10 @@ function appendFeedMonth(m, animate, isLast = true) {
       html += `<article class="${cls}">
         <div class="ticket-head"><div><div class="wdn">${ds === today ? 'Сьогодні' : WEEKDAYS[wd(date)]}</div><div class="dt muted">${ds === today ? WEEKDAYS[wd(date)].toLowerCase() + ', ' : ''}${d} ${MONTHS_GEN[mi]}${list.length ? '' : ' · вільно'}</div></div>
         <div style="display:flex;align-items:center;gap:12px"><button class="add-here" data-a="add" data-d="${ds}" aria-label="Додати на ${d} ${MONTHS_GEN[mi]}">${ui('plus')}</button><span class="big">${d}</span></div></div>
-        ${list.length ? `<div class="t-items">${list.map(({ ev, date: dd }) => `<button class="t-item ${isDone(ev, dd) ? 'done' : ''}" data-open="${ev.id}" data-date="${dd}">
+        ${list.length ? `<div class="t-items">${list.map(({ ev, date: dd }) => { const stt = occStatus(ev, dd); return `<button class="t-item ${isDone(ev, dd) ? 'done' : ''} st-${stt.id}" data-open="${ev.id}" data-date="${dd}">
           <span class="tm">${ev.allDay || !ev.start ? '—' : ev.start}</span>
           <span class="ttl">${esc(ev.title)}${feedSub(ev, dd)}</span>
-          <span class="dotc" style="background:var(--${colorOf(ev)})"></span></button>`).join('')}</div>` : ''}
+          <span class="dotc" style="background:var(--${colorOf(ev)})"></span></button>`; }).join('')}</div>` : ''}
       </article>`;
     }
     html += '</div>';

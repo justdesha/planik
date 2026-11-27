@@ -5,6 +5,8 @@ import { VERSION } from './profile.js';
 import { playDeck } from './stories.js';
 import { moodFace, MOODS } from './moods.js';
 import { sticker, ui } from './icons.js';
+import { wheelSvg } from './wheel.js';
+import { openOracle } from './oracle.js';
 
 const LOGO_OLD = '<svg viewBox="0 0 1024 1024"><rect width="1024" height="1024" fill="#0F4A37"/><rect x="282" y="232" width="168" height="580" rx="84" fill="#D4F46A"/><path d="M430 232 A218 218 0 0 1 430 668 Z" fill="#F5922F"/><circle cx="528" cy="410" r="27" fill="#161513"/><path d="M520 500 q56 56 112 0" fill="none" stroke="#161513" stroke-width="26" stroke-linecap="round"/></svg>';
 export const LOGO = '<svg viewBox="0 0 1024 1024" aria-hidden="true"><rect width="1024" height="1024" fill="#F47742"/><rect x="196" y="250" width="632" height="560" rx="120" fill="#FFFFFF"/><path d="M196 370a120 120 0 0 1 120-120h392a120 120 0 0 1 120 120v70H196z" fill="#2D4FC5"/><rect x="340" y="178" width="70" height="150" rx="35" fill="#161513"/><rect x="614" y="178" width="70" height="150" rx="35" fill="#161513"/><path d="M300 724a212 212 0 0 1 424 0z" fill="#F4D58A"/><circle cx="440" cy="628" r="24" fill="#161513"/><circle cx="584" cy="628" r="24" fill="#161513"/><path d="M474 676q38 32 76 0" fill="none" stroke="#161513" stroke-width="22" stroke-linecap="round"/></svg>';
@@ -52,6 +54,38 @@ const DECKS = {
   ]
 };
 
+DECKS['1.3.0'] = () => [
+  { bg: 'cobalt', html: `
+    <div class="sx-top"><span class="sx-word">planik</span></div>
+    <div class="sx-mid"><p class="sx-kicker">оновлення 1.3</p><h2 class="sx-hero" style="color:var(--butter)">Що нового</h2>
+      <p class="sx-text">Статуси подій, передбачення дня, колесо балансу і заплановані покупки.</p></div>
+    <span class="sx-halves" aria-hidden="true"><i></i><i></i></span>` },
+  { bg: 'cream', html: `
+    <div class="sx-mid"><p class="sx-kicker">календар</p><h2 class="sx-h">Події мають статус</h2>
+      <div class="wn-evs">
+        <div class="wn-ev past"><b>Ранкова пробіжка</b><span class="tag st-past">Завершено</span></div>
+        <div class="wn-ev active"><span class="ev-now wn-run" aria-hidden="true"><i></i></span><b>Прогулянка з Олею</b><span class="tag now"><i></i>В процесі</span></div>
+        <div class="wn-ev"><b>Кіно о 19:00</b><span class="tag">Заплановано</span></div>
+        <div class="wn-ev cx"><b>Зустріч з орендодавцем</b><span class="tag st-cx">Скасовано</span></div></div>
+      <ol class="wn-steps"><li><span>Подія, що йде зараз, поступово заповнюється лінією часу</span></li><li><span>Минулі тьмяніють і стають «Завершено»</span></li><li><span>Відкрий подію → <b>Скасувати</b>: вона лишиться в календарі, але без нагадувань</span></li></ol></div>` },
+  { bg: 'ink', html: `
+    <div class="sx-mid"><p class="sx-kicker">щодня</p><h2 class="sx-h" style="color:var(--butter)">Передбачення дня</h2>
+      <div class="wn-orb"><span class="orb-mini" aria-hidden="true"><i></i><i></i><i></i></span></div>
+      <ol class="wn-steps"><li><span>Торкнись картки <b>Передбачення дня</b> на головному</span></li><li><span><b>Струсни телефон</b> — куля спалахне і покаже передбачення</span></li><li><span>Одне на день, без переобрання. Минулі живуть у днях календаря</span></li></ol></div>` },
+  { bg: 'butter', html: `
+    <div class="sx-mid"><p class="sx-kicker">пульс</p><h2 class="sx-h">Колесо балансу</h2>
+      <div class="sx-wheel">${wheelSvg({ health: 7, work: 8, money: 5, love: 6, people: 9, growth: 7, rest: 4, home: 6 }, { size: 220 })}</div>
+      <ol class="wn-steps"><li><span>Раз на місяць оціни вісім сфер від 1 до 10</span></li><li><span>Забудеш — після 25-го прийде нагадування</span></li><li><span>Минулі колеса — кнопка <b>Минулі</b></span></li></ol></div>` },
+  { bg: 'peach', html: `
+    <div class="sx-mid"><p class="sx-kicker">гроші</p><h2 class="sx-h">Покупки з календаря</h2>
+      <div class="wn-buy"><span class="sb sm c-sand">${sticker('bag')}</span><span class="grow"><b>Нові кросівки</b><span>12 грудня · план 2 400</span></span><span class="pill-when">Куплено</span></div>
+      <ol class="wn-steps"><li><span>Подія в категорії <b>Покупки</b> тепер має поле <b>Сума</b></span></li><li><span>Вона зʼявиться в «Грошах» у запланованих, а баланс покаже, скільки лишиться</span></li><li><span>Скарбнички тепер гортаються рядком, «+» — у кінці</span></li></ol></div>` },
+  { bg: 'cobalt', html: `
+    <div class="sx-mid"><h2 class="sx-hero" style="color:var(--butter)">Готово!</h2><p class="sx-text">Почни з передбачення на сьогодні.</p>
+      <div class="wn-go"><button class="btn btn-acc" data-sx="oracle"><span class="orb-mini" aria-hidden="true"><i></i><i></i><i></i></span>Відкрити передбачення</button><button class="btn btn-cream" data-sx="close">Пізніше</button></div></div>
+    <span class="sx-halves" aria-hidden="true"><i></i><i></i></span>`, onAction: (a, close) => { if (a === 'oracle') { openOracle(() => window.dispatchEvent(new CustomEvent('planik:refresh'))); close(); } } }
+];
+
 const vnum = (v) => (v || '0').split('.').map(Number).reduce((a, n) => a * 1000 + (n || 0), 0);
 
 /** after an update: play decks newer than the last one seen */
@@ -68,6 +102,11 @@ export function showWhatsNew({ from = '', replay = false } = {}) {
   const versions = replay ? all.slice(-1) : all.filter((v) => vnum(v) > vnum(from));
   const slides = versions.flatMap((v) => DECKS[v]());
   const done = () => update((s) => { s.app = { ...(s.app || {}), seen: VERSION }; });
-  if (!slides.length) return done();
+  if (!slides.length) {
+    done();
+    // a small fix without stories: still say that the update arrived
+    if (!replay && from) setTimeout(() => import('./ui.js').then((m) => m.toast(`Planik оновлено до ${VERSION}`, { ms: 3500 })), 400);
+    return;
+  }
   playDeck(slides, { label: 'Що нового в Planik', onClose: done });
 }

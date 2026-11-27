@@ -1,12 +1,13 @@
 // Planik service worker: keeps the app working offline.
 // Bump VERSION on every release so phones pick up new files.
-const VERSION = 'planik-v1.2.2';
+const VERSION = 'planik-v1.3.2';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/util.js', './js/store.js', './js/icons.js', './js/ui.js',
   './js/calendar.js', './js/events.js', './js/trackers.js', './js/pulse.js',
   './js/profile.js', './js/onboarding.js', './js/notify.js', './js/stories.js',
   './js/moods.js', './js/moodui.js', './js/money.js', './js/whatsnew.js',
+  './js/wheel.js', './js/oracle.js', './js/oracle-data.js',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png', './icons/favicon.png',
   './fonts/dela-gothic-one-cyrillic-400-normal.woff2', './fonts/dela-gothic-one-latin-400-normal.woff2',
   './fonts/manrope-cyrillic-500-normal.woff2', './fonts/manrope-latin-500-normal.woff2',
@@ -47,7 +48,8 @@ self.addEventListener('fetch', (e) => {
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const target = e.notification.data && e.notification.data.eventId ? './#event=' + e.notification.data.eventId : './';
+  const nd = e.notification.data || {};
+  const target = nd.eventId ? './#event=' + nd.eventId : nd.wheel ? './#wheel' : './';
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) { if ('focus' in c) { c.postMessage({ open: e.notification.data }); return c.focus(); } }

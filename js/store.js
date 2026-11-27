@@ -54,6 +54,8 @@ function defaults() {
     stories: { seen: {} },
     mood: {},
     money: { cur: '₴', start: null, ops: [], cats: [], limits: {}, recs: [], jars: [] },
+    wheel: {},
+    oracle: {},
     app: { seen: '' }
   };
 }
@@ -76,6 +78,8 @@ function load() {
       stories: { ...d.stories, ...s.stories },
       mood: { ...(s.mood || {}) },
       money: { ...d.money, ...(s.money || {}) },
+      wheel: { ...(s.wheel || {}) },
+      oracle: { ...(s.oracle || {}) },
       app: { ...d.app, ...(s.app || {}) }
     };
     // 1.1 → 1.2: color keys renamed with the new palette
@@ -170,6 +174,39 @@ export function occurrences(from, to, filter = () => true) {
 }
 
 export const isDone = (ev, date) => !!(ev.doneDates && ev.doneDates.includes(date));
+export const isCancelled = (ev, date) => !!(ev.cancelled && ev.cancelled.includes(date));
+export function toggleCancel(id, date) {
+  update((s) => {
+    const ev = s.events.find((e) => e.id === id); if (!ev) return;
+    ev.cancelled = ev.cancelled || [];
+    const i = ev.cancelled.indexOf(date);
+    if (i >= 0) ev.cancelled.splice(i, 1); else ev.cancelled.push(date);
+    if (!ev.cancelled.length) delete ev.cancelled;
+  });
+}
+/** start and end of one occurrence; no end = one hour, end before start = runs past midnight */
+export function occSpan(ev, date) {
+  if (ev.allDay || !ev.start) return { s: atTime(date, '00:00'), e: atTime(ymd(addDays(parseYmd(date), 1)), '00:00'), allDay: true };
+  const s = atTime(date, ev.start);
+  let e = ev.end ? atTime(date, ev.end) : new Date(s.getTime() + 3600000);
+  if (e <= s) e = ev.end ? new Date(e.getTime() + 86400000) : new Date(s.getTime() + 3600000);
+  return { s, e, allDay: false };
+}
+/**
+ * Status of one occurrence, like Google Calendar:
+ * cancelled → «Скасовано»; done task → «Виконано»; now inside the time → «В процесі»;
+ * already over → «Завершено»; otherwise «Заплановано». Birthdays have none.
+ */
+export function occStatus(ev, date, now = new Date()) {
+  if (isCancelled(ev, date)) return { id: 'cancelled' };
+  if (ev.kind === 'birthday') return { id: 'none' };
+  if (ev.kind === 'task' && isDone(ev, date)) return { id: 'done' };
+  const { s, e, allDay } = occSpan(ev, date);
+  if (now >= e) return { id: ev.kind === 'task' ? 'missed' : 'past' };
+  if (now >= s) return allDay ? { id: 'today' } : { id: 'active', p: (now - s) / (e - s), s, e };
+  return { id: 'planned' };
+}
+export const STATUS_LABEL = { planned: 'Заплановано', active: 'В процесі', past: 'Завершено', done: 'Виконано', cancelled: 'Скасовано', missed: 'Не виконано', today: 'Сьогодні' };
 export function toggleDone(id, date) {
   update((s) => {
     const ev = s.events.find((e) => e.id === id);
@@ -179,6 +216,7 @@ export function toggleDone(id, date) {
     if (i >= 0) ev.doneDates.splice(i, 1); else ev.doneDates.push(date);
     // a recurring payment ticked in the calendar becomes an expense in Money
     if (ev.pay && i < 0) setTimeout(() => window.dispatchEvent(new CustomEvent('planik:paid', { detail: { rec: ev.pay, date } })), 0);
+    if (ev.cat === 'buy' && ev.amount > 0 && i < 0) setTimeout(() => window.dispatchEvent(new CustomEvent('planik:bought', { detail: { id: ev.id, date } })), 0);
     // a task planned from a checklist item ticks that item too
     if (ev.link) {
       const parent = s.events.find((e) => e.id === ev.link.ev);
@@ -222,7 +260,7 @@ export function nextImportant() {
   const to = ymd(addDays(new Date(), state.settings.importantHorizon || 14));
   const now = new Date();
   const list = occurrences(from, to, (e) => e.important)
-    .filter(({ ev, date }) => !isDone(ev, date) && (ev.allDay || !ev.start ? true : occTime(ev, date) > now));
+    .filter(({ ev, date }) => !isDone(ev, date) && !isCancelled(ev, date) && (ev.allDay || !ev.start ? true : occTime(ev, date) > now));
   return list[0] || null;
 }
 
@@ -259,6 +297,7 @@ export function inboxItems(now = new Date()) {
   const occ = occurrences(from, to);
 
   for (const { ev, date } of occ) {
+    if (isCancelled(ev, date)) continue;
     const when = occTime(ev, date);
     const endOfOcc = ev.allDay || !ev.start ? atTime(date, '23:59') : atTime(date, ev.end || ev.start);
     // overdue tasks
@@ -278,6 +317,14 @@ export function inboxItems(now = new Date()) {
     const c = trackerCount(t);
     if (t.goal && c >= t.goal) items.push({ id: `goal|${t.id}|${t.goal}`, type: 'goal', tracker: t, at: now });
     if (t.end && t.end <= today) items.push({ id: `end|${t.id}|${t.end}`, type: 'trackerEnd', tracker: t, at: atTime(t.end, '09:00') });
+  }
+  // planned money operations: a note on their day
+  for (const o of (state.money && state.money.ops) || []) {
+    if (o.plan && o.d <= today && o.d >= from) items.push({ id: `money|${o.id}`, type: 'moneyDue', op: o, at: atTime(o.d, '09:00') });
+  }
+  // balance wheel: from the 25th, if this month has none yet
+  if (now.getDate() >= 25 && !(state.wheel || {})[ymd(now).slice(0, 7)]) {
+    items.push({ id: `wheel|${ymd(now).slice(0, 7)}`, type: 'wheel', at: new Date(now.getFullYear(), now.getMonth(), 25, 10, 0) });
   }
   return items.sort((a, b) => b.at - a.at);
 }

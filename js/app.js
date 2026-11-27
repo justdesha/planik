@@ -9,8 +9,9 @@ import { mountProfile, renderProfile } from './profile.js';
 import { mountMoney, renderMoney, moneyHasData, moneySlides } from './money.js';
 import { setExtraData, setExtraSlides } from './stories.js';
 import { maybeWhatsNew } from './whatsnew.js';
+import { wheelSlide, openWheelEdit } from './wheel.js';
 import { runOnboarding } from './onboarding.js';
-import { openEventForm, openEvent } from './events.js';
+import { openEventForm, openEvent, liveTick } from './events.js';
 import { tick } from './notify.js';
 import { closeAllSheets } from './ui.js';
 import { reduceMotion } from './util.js';
@@ -79,7 +80,7 @@ function moveIndicator(id, animate = true, fromId) {
 /* ---------- swipe left / right to move between the menu sections ---------- */
 const NAV = ['home', 'trackers', 'money', 'pulse'];
 // places where a horizontal swipe already means something else
-const OWN_SWIPE = '.cal, .chips.scroll, .mood-row, .sx-row, .swr, .wd-pick, input, textarea, .nav, .seg';
+const OWN_SWIPE = '.cal, .chips.scroll, .mood-row, .sx-row, .swr, .wd-pick, .jars-row, .wheel-edit, input, textarea, .nav, .seg';
 function bindTabSwipe() {
   let x0 = null, y0 = 0, t0 = 0;
   document.addEventListener('touchstart', (e) => {
@@ -134,14 +135,24 @@ function openFromHash() {
     history.replaceState(null, '', location.pathname);
     switchTab('home', { silent: true });
     setTimeout(() => openEvent(m[1], null, refresh), 300);
+  } else if (location.hash === '#wheel') {
+    history.replaceState(null, '', location.pathname);
+    switchTab('pulse', { silent: true });
+    setTimeout(() => openWheelEdit(refresh), 300);
   }
 }
 
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register('./sw.js').then((reg) => {
-    // look for a new version every time Planik comes back to the screen
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  // updateViaCache: 'none' — never take sw.js from the browser cache, always ask GitHub
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+    const check = () => { if (!document.hidden) reg.update().catch(() => {}); };
+    // look for a new version when Planik comes back to the screen, gets focus,
+    // and every 10 minutes while it simply stays open
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    window.addEventListener('pageshow', check);
+    setInterval(check, 10 * 60 * 1000);
   }).catch(() => {});
   // a new version took over: reload, but never in the middle of filling something in
   let pending = false;
@@ -155,6 +166,7 @@ function registerSW() {
   navigator.serviceWorker.addEventListener('message', (e) => {
     const d = e.data && e.data.open;
     if (d && d.eventId) { closeAllSheets(); switchTab('home', { silent: true }); openEvent(d.eventId, d.date, refresh); }
+    else if (d && d.wheel) { closeAllSheets(); switchTab('pulse', { silent: true }); openWheelEdit(refresh); }
   });
 }
 
@@ -164,15 +176,19 @@ function start() {
   const st = getState();
   refresh();
   setExtraData(moneyHasData);
-  setExtraSlides(moneySlides);
+  setExtraSlides((p) => [...moneySlides(p), wheelSlide(p)].filter(Boolean));
   if (!st.user.onboarded) runOnboarding(() => refresh());
   else setTimeout(maybeWhatsNew, 600);
   openFromHash();
   tick(refresh);
   setInterval(() => tick(refresh), 30000);
+  // the progress line on running events moves every 20 s
+  setInterval(() => { if (!document.hidden) liveTick(refresh); }, 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) liveTick(refresh); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(refresh); refresh(); } });
   window.addEventListener('hashchange', openFromHash);
   window.addEventListener('planik:tab', (e) => switchTab(e.detail));
+  window.addEventListener('planik:refresh', () => refresh());
   registerSW();
   bindTabSwipe();
 }

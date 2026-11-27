@@ -8,6 +8,7 @@ import { bubblesHtml, openStory, periodById } from './stories.js';
 import { humanDate } from './util.js';
 import { selectDate } from './calendar.js';
 import { moodCardHtml, bindMoodCard } from './moodui.js';
+import { wheelCardHtml, bindWheel } from './wheel.js';
 import { toast } from './ui.js';
 
 /** a purchase ticked in Pulse: offer to put it into Money right away */
@@ -62,6 +63,7 @@ export function mountPulse(el) {
   root = el;
   bindEventRows(root, renderPulse);
   bindMoodCard(root, renderPulse);
+  bindWheel(root, renderPulse);
   root.addEventListener('click', (e) => {
     const b = e.target.closest('[data-p]');
     if (!b) return;
@@ -138,6 +140,7 @@ export function renderPulse() {
     ${bubblesHtml()}
     <section class="cheer"><h2 class="h2">${esc(h)}</h2><p>${esc(p)}</p><span class="halves" aria-hidden="true"><i></i><i></i></span></section>
     ${moodCardHtml()}
+    ${wheelCardHtml()}
 
     <section class="card"><div class="card-h"><h3 class="h3">Наступні 7 днів</h3><span class="small muted">${counts.reduce((a, b) => a + b, 0)} ${plural(counts.reduce((a, b) => a + b, 0), 'план', 'плани', 'планів')}</span></div>
       <div class="week-bars">${days.map((d, i) => `<button class="wb ${i === 0 ? 'today' : ''} ${counts[i] >= 4 ? 'busy' : ''}" data-p="day" data-d="${ymd(d)}" aria-label="${d.getDate()} ${MONTHS_GEN[d.getMonth()]}: ${counts[i]}">

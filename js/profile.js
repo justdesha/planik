@@ -5,7 +5,7 @@ import { ui, sticker, STICKER_ORDER } from './icons.js';
 import { openSheet, ask, toast, toggle, segIndicator, saveFile } from './ui.js';
 import { askPermission, notifState, isStandalone, updateBadge } from './notify.js';
 
-export const VERSION = '1.2.2';
+export const VERSION = '1.3.2';
 
 /** resolve "auto" against the phone setting and paint the theme */
 export function applyTheme() {
@@ -78,25 +78,43 @@ export function pickPhoto() {
 }
 
 let root;
-/** pick a .json backup and replace everything with it */
-export function importBackup() {
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = 'application/json,.json';
-  inp.onchange = async () => {
-    const f = inp.files[0]; if (!f) return;
+/**
+ * "Restore from backup" as a real <label> around a real file input that lives in the page.
+ * On iPhone an input created on the fly and never attached gets lost while the picker is open,
+ * so the chosen file never arrives. Tapping a label opens the picker natively every time.
+ */
+export const restoreButton = (cls, inner) => `<label class="${cls} file-btn">${inner}<input type="file" class="file-in" data-restore accept=".json,application/json,text/plain,text/json"></label>`;
+
+const readText = (f) => (f.text ? f.text() : new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsText(f); }));
+
+/** listen for a chosen backup anywhere inside root */
+export function bindRestore(root) {
+  root.addEventListener('change', async (e) => {
+    const inp = e.target.closest('[data-restore]');
+    if (!inp) return;
+    const f = inp.files && inp.files[0];
+    inp.value = '';
+    if (!f) return;
+    toast('Читаю копію…');
     try {
-      const data = JSON.parse(await f.text());
+      const text = await readText(f);
+      let data;
+      try { data = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (err) { throw new Error('Це не файл резервної копії Planik (.json)'); }
       const fresh = !getState().user.onboarded;
       const ok = fresh || await ask('Поточні дані заміняться даними з копії.', [{ label: 'Відновити', value: true, style: 'ink' }]);
       if (!ok) return;
       data.user = { ...(data.user || {}), onboarded: true };
-      importState(data); location.reload();
-    } catch (err) { toast(err.message && err.message.includes('Planik') ? err.message : 'Файл не вдалося прочитати'); }
-  };
-  inp.click();
+      // a fresh phone restoring a copy does not need the update stories on top
+      if (fresh) data.app = { ...(data.app || {}), seen: VERSION };
+      importState(data);
+      toast('Готово, відкриваю…');
+      setTimeout(() => location.reload(), 350);
+    } catch (err) { toast(err && err.message ? err.message : 'Файл не вдалося прочитати', { ms: 4000 }); }
+  });
 }
 
 export function mountProfile(el, { restartOnboarding }) {
+  bindRestore(el);
   root = el;
   bindReminders(root);
   root.addEventListener('click', async (e) => {
@@ -126,8 +144,6 @@ export function mountProfile(el, { restartOnboarding }) {
       const r = await saveFile(`planik-backup-${new Date().toISOString().slice(0, 10)}.json`, exportState(), 'application/json');
       if (r === 'shared') toast('Копію передано'); else if (r === 'downloaded') toast('Копію збережено');
       else if (r === 'fail') toast('Не вдалося зберегти копію');
-    } else if (a === 'import') {
-      importBackup();
     } else if (a === 'cat') {
       openCategoryForm();
     } else if (a === 'back') {
@@ -178,7 +194,7 @@ export function renderProfile() {
     <section class="set-group"><h2 class="h3">Дані</h2><p>Усе зберігається тільки на цьому телефоні. Роби копію час від часу.</p>
       <div class="set">
         <button class="set-row" data-pr="export">${ui('download')}<span class="grow">Зберегти резервну копію<span>Файл .json у Файли або iCloud</span></span></button>
-        <button class="set-row" data-pr="import">${ui('upload')}<span class="grow">Відновити з копії</span></button>
+        ${restoreButton('set-row', `${ui('upload')}<span class="grow">Відновити з копії</span>`)}
         <button class="set-row" data-pr="news">${ui('spark')}<span class="grow">Що нового<span>Planik ${VERSION} у сторіз</span></span></button>
         <button class="set-row" data-pr="onboard">${ui('repeat')}<span class="grow">Пройти знайомство знову</span></button>
         <button class="set-row danger" data-pr="reset">${ui('trash')}<span class="grow">Видалити всі дані</span></button>
