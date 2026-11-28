@@ -5,7 +5,7 @@ import { ui, sticker, STICKER_ORDER } from './icons.js';
 import { openSheet, ask, toast, toggle, segIndicator, saveFile } from './ui.js';
 import { askPermission, notifState, isStandalone, updateBadge } from './notify.js';
 
-export const VERSION = '1.3.3';
+export const VERSION = '1.3.4';
 
 /** resolve "auto" against the phone setting and paint the theme */
 export function applyTheme() {

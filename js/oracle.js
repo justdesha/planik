@@ -4,23 +4,68 @@ import { getState, update } from './store.js';
 import { ui, sticker } from './icons.js';
 import { ORACLE } from './oracle-data.js';
 
-/* ---------- which prediction belongs to a day ---------- */
-// every year gets its own shuffle of all 365, so no day repeats within a year
+/* ---------- which prediction belongs to a day ----------
+ * Every person gets their own random draw, made the moment they open the ball.
+ * A prediction can come up at most twice within any 365 days, and never twice
+ * within two weeks. What was drawn is stored, so a day always keeps its prediction.
+ */
+const MAX_PER_YEAR = 2;
+const NO_REPEAT_DAYS = 14;
+const log = () => getState().oracleLog || {};
+const dayNum = (d) => Math.round(parseYmd(d).getTime() / 86400000);
+
+/** a fair random integer in [0, n) */
+function randInt(n) {
+  try {
+    const buf = new Uint32Array(1);
+    const lim = Math.floor(0xFFFFFFFF / n) * n;
+    do { crypto.getRandomValues(buf); } while (buf[0] >= lim);
+    return buf[0] % n;
+  } catch (e) { return Math.floor(Math.random() * n); }
+}
+
+// before 1.3.4 the prediction was taken from a shared list by date; days opened back then keep it
 const perms = {};
-function perm(year) {
-  if (perms[year]) return perms[year];
-  let a = year * 2654435761 >>> 0;
-  const rnd = () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  const p = ORACLE.map((_, i) => i);
-  for (let i = p.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
-  return (perms[year] = p);
+function legacyIndex(d) {
+  const dt = parseYmd(d), year = dt.getFullYear();
+  if (!perms[year]) {
+    let a = year * 2654435761 >>> 0;
+    const rnd = () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const p = ORACLE.map((_, i) => i);
+    for (let i = p.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+    perms[year] = p;
+  }
+  const day = Math.round((dt - new Date(year, 0, 1)) / 86400000);
+  return perms[year][day % ORACLE.length];
 }
-export function oracleFor(d) {
-  const dt = parseYmd(d);
-  const day = Math.round((dt - new Date(dt.getFullYear(), 0, 1)) / 86400000);
-  return ORACLE[perm(dt.getFullYear())[day % ORACLE.length]];
-}
+
 const opened = (d) => !!(getState().oracle || {})[d];
+/** index of the prediction a day got, or null if that day was never opened */
+export function oracleIdx(d) {
+  const l = log();
+  if (l[d] !== undefined) return l[d];
+  return opened(d) ? legacyIndex(d) : null;
+}
+export const oracleFor = (d) => { const i = oracleIdx(d); return i === null ? '' : ORACLE[i]; };
+
+/** draw a prediction for a day: random among the ones still allowed */
+export function drawOracle(d) {
+  const n = dayNum(d);
+  const uses = new Map(), recent = new Set();
+  const all = { ...log() };
+  for (const k of Object.keys(getState().oracle || {})) if (all[k] === undefined) all[k] = legacyIndex(k);
+  for (const [k, i] of Object.entries(all)) {
+    const age = n - dayNum(k);
+    if (age <= 0 || age >= 365) continue;
+    uses.set(i, (uses.get(i) || 0) + 1);
+    if (age < NO_REPEAT_DAYS) recent.add(i);
+  }
+  const ids = ORACLE.map((_, i) => i);
+  let pool = ids.filter((i) => (uses.get(i) || 0) < MAX_PER_YEAR && !recent.has(i));
+  if (!pool.length) pool = ids.filter((i) => !recent.has(i));
+  if (!pool.length) pool = ids;
+  return pool[randInt(pool.length)];
+}
 
 /* ---------- home ---------- */
 const miniOrb = '<span class="orb-mini" aria-hidden="true"><i></i><i></i><i></i></span>';
@@ -35,7 +80,7 @@ export function oracleHomeHtml() {
 /** for a day in the calendar: past days and today once it is opened */
 export function dayOracleHtml(d) {
   const t = todayYmd();
-  if (d > t || (d === t && !opened(t))) return '';
+  if (d > t || oracleIdx(d) === null) return '';
   return `<div class="orb-day">${miniOrb}<span><small>Передбачення ${d === t ? 'на сьогодні' : 'цього дня'}</small>${esc(oracleFor(d))}</span></div>`;
 }
 
@@ -106,7 +151,11 @@ export async function openOracle(after) {
     setTimeout(() => {
       // …and a heavy double knock when it bursts open
       hapticPattern([0, 45, 90, 200], 40);
-      update((s) => { s.oracle = s.oracle || {}; s.oracle[t] = Date.now(); });
+      update((s) => {
+        s.oracle = s.oracle || {}; s.oracleLog = s.oracleLog || {};
+        if (s.oracleLog[t] === undefined) s.oracleLog[t] = drawOracle(t);
+        s.oracle[t] = Date.now();
+      });
       plasma.calm();
       state = 'shown';
       showText(false);

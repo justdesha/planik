@@ -56,6 +56,7 @@ function defaults() {
     money: { cur: '₴', start: null, ops: [], cats: [], limits: {}, recs: [], jars: [] },
     wheel: {},
     oracle: {},
+    oracleLog: {},
     app: { seen: '' }
   };
 }
@@ -80,6 +81,7 @@ function load() {
       money: { ...d.money, ...(s.money || {}) },
       wheel: { ...(s.wheel || {}) },
       oracle: { ...(s.oracle || {}) },
+      oracleLog: { ...(s.oracleLog || {}) },
       app: { ...d.app, ...(s.app || {}) }
     };
     // 1.1 → 1.2: color keys renamed with the new palette
