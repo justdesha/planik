@@ -5,7 +5,7 @@ import { ui, sticker, STICKER_ORDER } from './icons.js';
 import { openSheet, ask, toast, toggle, segIndicator, saveFile } from './ui.js';
 import { askPermission, notifState, isStandalone, updateBadge } from './notify.js';
 
-export const VERSION = '1.3.5';
+export const VERSION = '1.3.6';
 
 /** resolve "auto" against the phone setting and paint the theme */
 export function applyTheme() {
@@ -124,6 +124,10 @@ function openHapticTest() {
       ${[['a', '1. Спосіб А', 'прихований перемикач, створюється на мить'], ['b', '2. Спосіб Б', 'прихований перемикач, що живе на сторінці'], ['vibrate', '3. Вібрація Android', 'стандартна вебвібрація']].map(([k, t, d]) => `
         <div class="hp-row"><span class="grow"><b>${t}</b><span>${d}</span></span><button class="btn btn-sand btn-sm" data-hp="${k}">Тік</button><button class="chip" data-hpuse="${k}" aria-pressed="${cur === k}">Обрати</button></div>`).join('')}
       <div class="hp-row"><span class="grow"><b>4. Із затримкою</b><span>спосіб А через пів секунди — так працює гул кулі</span></span><button class="btn btn-sand btn-sm" data-hpdelay>Тік</button></div>
+      <p class="small" style="margin:16px 4px 8px;font-weight:800">Нові: твій дотик сам перемикає прихований перемикач</p>
+      <div class="hp-row"><span class="grow"><b>5. Кнопка-мітка</b><span>під кнопкою прозорий перемикач</span></span><label class="btn btn-sand btn-sm hp-lab">Тік<input type="checkbox" switch class="hp-in-op"></label></div>
+      <div class="hp-row"><span class="grow"><b>6. Кнопка-мітка, схований</b><span>перемикач усередині, але невидимий повністю</span></span><label class="btn btn-sand btn-sm hp-lab">Тік<input type="checkbox" switch class="hp-in-none"></label></div>
+      <div class="hp-row"><span class="grow"><b>7. Прозорий перемикач поверх</b><span>сам перемикач лежить на кнопці, просто прозорий</span></span><span class="btn btn-sand btn-sm hp-over">Тік<input type="checkbox" switch class="hp-in-over" aria-label="Тік"></span></div>
       <div class="chips" style="margin-top:12px"><button class="chip" data-hpuse="auto" aria-pressed="${cur === 'auto'}">Автоматично</button><button class="chip" data-hpuse="off" aria-pressed="${cur === 'off'}">Вимкнути вібрацію</button></div>
       <p class="tiny muted" style="margin:14px 4px 0">${info}</p>`,
     onMount(s) {
