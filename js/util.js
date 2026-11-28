@@ -77,40 +77,66 @@ export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
 /*
- * Haptics. Android: the Vibration API. iPhone has no such API for web apps, but since iOS 18
- * toggling a native switch (<input type="checkbox" switch>) gives a real Taptic tick —
- * we toggle a hidden one. Older iPhones simply stay silent.
+ * Haptics. Android: the Vibration API. iPhone has no vibration API for web apps, but toggling a
+ * native switch (<input type="checkbox" switch>, iOS 18+) gives a real Taptic tick. Two ways to
+ * toggle it are kept, because WebKit has changed which one it honours; the profile has a test
+ * screen to see which works on a given phone, and the choice is remembered.
  */
-let hapticLabel = null;
-function iosTick() {
-  if (!hapticLabel) {
-    hapticLabel = document.createElement('label');
-    hapticLabel.setAttribute('aria-hidden', 'true');
-    hapticLabel.style.cssText = 'position:fixed;left:-200px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+export const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const canVibrate = () => typeof navigator.vibrate === 'function';
+
+// way A: a throw-away hidden label in <head>, clicked and removed (the common "ios-haptics" trick)
+function tickA() {
+  const l = document.createElement('label');
+  l.setAttribute('aria-hidden', 'true');
+  l.style.display = 'none';
+  const i = document.createElement('input');
+  i.type = 'checkbox'; i.setAttribute('switch', '');
+  l.append(i);
+  (document.head || document.body).append(l);
+  l.click();
+  l.remove();
+}
+// way B: a real switch kept in the page, toggled through its label
+let keptLabel = null;
+function tickB() {
+  if (!keptLabel) {
+    keptLabel = document.createElement('label');
+    keptLabel.setAttribute('aria-hidden', 'true');
+    keptLabel.style.cssText = 'position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:.01;overflow:hidden;z-index:-1';
     const i = document.createElement('input');
     i.type = 'checkbox'; i.setAttribute('switch', ''); i.tabIndex = -1;
-    hapticLabel.append(i);
-    hapticLabel.addEventListener('click', (e) => e.stopPropagation());
+    keptLabel.append(i);
+    keptLabel.addEventListener('click', (e) => e.stopPropagation());
     i.addEventListener('change', (e) => e.stopPropagation());
-    document.body.append(hapticLabel);
+    document.body.append(keptLabel);
   }
-  // a label click moves focus to the switch; give it back so a typed field keeps its keyboard
   const prev = document.activeElement;
-  hapticLabel.click();
+  keptLabel.click();
   if (prev && prev !== document.body && prev !== document.activeElement && prev.focus) prev.focus({ preventScroll: true });
 }
-const canVibrate = () => typeof navigator.vibrate === 'function';
-export function haptic(ms = 8) {
-  try { if (canVibrate()) navigator.vibrate(ms); else iosTick(); } catch (e) { /* no haptics here */ }
+export const HAPTIC_WAYS = { a: tickA, b: tickB, vibrate: () => navigator.vibrate && navigator.vibrate(30) };
+const way = () => { try { return localStorage.getItem('planik:haptic') || 'auto'; } catch (e) { return 'auto'; } };
+export const setHapticWay = (w) => { try { localStorage.setItem('planik:haptic', w); } catch (e) { /* ignore */ } };
+
+function tick(ms) {
+  const w = way();
+  if (w === 'off') return;
+  if (w === 'a' || w === 'b') return HAPTIC_WAYS[w]();
+  if (w === 'vibrate') return navigator.vibrate && navigator.vibrate(ms);
+  // auto: on iPhone always the switch trick (navigator.vibrate may exist there but do nothing)
+  if (isIOS()) return tickA();
+  if (canVibrate()) navigator.vibrate(ms);
 }
-/** a rhythm: ticks at the given moments (ms from now); on Android each tick lasts `len` */
+export function haptic(ms = 8) { try { tick(ms); } catch (e) { /* no haptics here */ } }
+/** a rhythm: ticks at the given moments (ms from now) */
 export function hapticPattern(times, len = 12) {
   try {
-    if (canVibrate()) {
+    if (!isIOS() && canVibrate() && way() !== 'a' && way() !== 'b') {
       const pat = []; let prev = 0;
       times.forEach((t, i) => { if (i) pat.push(Math.max(10, t - prev - len)); pat.push(len); prev = t; });
       navigator.vibrate(pat);
-    } else times.forEach((t) => (t ? setTimeout(iosTick, t) : iosTick()));
+    } else times.forEach((t) => (t ? setTimeout(() => tick(len), t) : tick(len)));
   } catch (e) { /* no haptics here */ }
 }
 
