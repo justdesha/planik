@@ -14,7 +14,7 @@ import { runOnboarding } from './onboarding.js';
 import { openEventForm, openEvent, liveTick } from './events.js';
 import { tick } from './notify.js';
 import { closeAllSheets } from './ui.js';
-import { reduceMotion } from './util.js';
+import { reduceMotion, hx, setHapticsOn } from './util.js';
 import { applyTheme } from './profile.js';
 
 const TABS = [
@@ -34,7 +34,7 @@ function shell() {
     <nav class="nav" aria-label="Розділи">
       <span class="nav-ind" aria-hidden="true"></span>
       ${tabBtn(TABS[0])}${tabBtn(TABS[1])}
-      <button class="nav-add" id="navAdd" aria-label="Додати план">${ui('plus')}</button>
+      <label class="nav-add hxl" id="navAdd" role="button" tabindex="0" aria-label="Додати план">${ui('plus')}${hx()}</label>
       ${tabBtn(TABS[2])}${tabBtn(TABS[3])}
     </nav>`;
   mountHome($('#s-home'));
@@ -55,7 +55,7 @@ function shell() {
   window.addEventListener('resize', () => moveIndicator(current, false));
 }
 
-const tabBtn = (t) => `<button class="nav-tab" data-tab="${t.id}" ${t.id === current ? 'aria-current="page"' : ''}>${ui(t.icon)}<span>${t.label}</span></button>`;
+const tabBtn = (t) => `<label class="nav-tab hxl" role="button" tabindex="0" data-tab="${t.id}" ${t.id === current ? 'aria-current="page"' : ''}>${ui(t.icon)}<span>${t.label}</span>${hx()}</label>`;
 
 function moveIndicator(id, animate = true, fromId) {
   const nav = $('.nav'), ind = $('.nav-ind'), tab = nav.querySelector(`[data-tab="${id}"]`);
@@ -81,6 +81,12 @@ function moveIndicator(id, animate = true, fromId) {
 const NAV = ['home', 'trackers', 'money', 'pulse'];
 // places where a horizontal swipe already means something else
 const OWN_SWIPE = '.cal, .chips.scroll, .mood-row, .sx-row, .swr, .wd-pick, .jars-row, .wheel-edit, input, textarea, .nav, .seg';
+/* A tap on a haptic <label> fires twice: on the label, then on its hidden switch.
+   Only the first one is for the app; the second just toggles the switch (that is the tick). */
+document.addEventListener('click', (e) => { if (e.target.classList && e.target.classList.contains('hx')) e.stopPropagation(); }, true);
+// keyboard: Enter / Space on a label-button acts like a tap
+document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('label[role="button"]')) { e.preventDefault(); e.target.click(); } });
+
 function bindTabSwipe() {
   let x0 = null, y0 = 0, t0 = 0;
   document.addEventListener('touchstart', (e) => {
@@ -171,6 +177,8 @@ function registerSW() {
 }
 
 function start() {
+  // haptics setting must be known before the first render: tap targets embed the hidden switch
+  setHapticsOn(getState().settings.haptics !== false);
   applyTheme();
   shell();
   const st = getState();
@@ -188,7 +196,11 @@ function start() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(refresh); refresh(); } });
   window.addEventListener('hashchange', openFromHash);
   window.addEventListener('planik:tab', (e) => switchTab(e.detail));
-  window.addEventListener('planik:refresh', () => refresh());
+  window.addEventListener('planik:refresh', () => {
+    refresh();
+    // vibration switched on/off: add or remove the hidden switches in the menu
+    document.querySelectorAll('.nav .hxl').forEach((l) => { const i = l.querySelector('.hx'); if (i && !hx()) i.remove(); if (!i && hx()) l.insertAdjacentHTML('beforeend', hx()); });
+  });
   registerSW();
   bindTabSwipe();
 }

@@ -1,5 +1,5 @@
 // "Пульс": the week at a glance, birthdays, things to buy, overdue tasks — and a bit of cheering.
-import { WD_SHORT, MONTHS_GEN, ymd, parseYmd, todayYmd, addDays, wd, esc, diffDays, pDays, plural, haptic } from './util.js';
+import { WD_SHORT, MONTHS_GEN, ymd, parseYmd, todayYmd, addDays, wd, esc, diffDays, pDays, plural, haptic, hx } from './util.js';
 import { getState, eventsOn, occurrences, isDone, inboxItems, trackerCount, update, colorOf } from './store.js';
 import { ui, sticker } from './icons.js';
 import { eventRow, bindEventRows, openEvent, openEventForm } from './events.js';
@@ -164,7 +164,7 @@ export function renderPulse() {
       ${buy.length ? buy.map(({ ev, date }) => `<div class="buy-group"><span>${esc(ev.title)} · ${parseYmd(date).getDate()} ${MONTHS_GEN[parseYmd(date).getMonth()]}</span>
         ${ev.checklist.map((c) => {
           const task = c.planned && getState().events.find((x) => x.id === c.planned);
-          return `<div class="cl-item ${c.done ? 'on' : ''}"><button class="cl-box" data-p="buy" data-ev="${ev.id}" data-id="${c.id}" aria-label="${c.done ? 'Зняти позначку' : 'Позначити готовим'}">${ui('check')}</button>
+          return `<div class="cl-item ${c.done ? 'on' : ''}"><label class="cl-box hxl" role="button" tabindex="0" data-p="buy" data-ev="${ev.id}" data-id="${c.id}" aria-label="${c.done ? 'Зняти позначку' : 'Позначити готовим'}">${ui('check')}${hx()}</label>
             <button class="cl-t cl-plan" data-p="plan" data-ev="${ev.id}" data-id="${c.id}" data-d="${date}">${esc(c.text)}${task ? `<small>заплановано · ${humanDate(task.date)}</small>` : '<small>торкнись, щоб запланувати</small>'}</button>
             ${task ? '' : `<span class="cl-cal" aria-hidden="true">${ui('calendar')}</span>`}</div>`;
         }).join('')}</div>`).join('')

@@ -1,5 +1,5 @@
 // Mood UI: home check-in, a day's mood, the Pulse card, the mood calendar sheet and story slides.
-import { MONTHS, MONTHS_GEN, WD_SHORT, WEEKDAYS, ymd, parseYmd, todayYmd, addDays, addMonths, wd, esc, haptic, plural } from './util.js';
+import { MONTHS, MONTHS_GEN, WD_SHORT, WEEKDAYS, ymd, parseYmd, todayYmd, addDays, addMonths, wd, esc, haptic, plural, hx } from './util.js';
 import { getState, update } from './store.js';
 import { ui } from './icons.js';
 import { openSheet, toast } from './ui.js';
@@ -8,7 +8,7 @@ import { MOODS, moodById, moodFace, moodsOf, moodOf, setMood, checkinSlot, SLOT_
 const SLOT_WORD = { am: 'Зранку', pm: 'Увечері' };
 const REACT = (v) => (v > 0 ? 'Відмічено. Хай так і триває' : v === 0 ? 'Відмічено' : 'Відмічено. Бережи себе сьогодні');
 
-const faceRow = (cur, attr) => `<div class="mood-row">${MOODS.map((m) => `<button class="mood-opt" ${attr}="${m.id}" aria-pressed="${cur === m.id}" aria-label="${m.name}">${moodFace(m.id)}<span>${m.name}</span></button>`).join('')}</div>`;
+const faceRow = (cur, attr) => `<div class="mood-row">${MOODS.map((m) => `<label class="mood-opt hxl" role="button" tabindex="0" ${attr}="${m.id}" aria-pressed="${cur === m.id}" aria-label="${m.name}">${moodFace(m.id)}<span>${m.name}</span>${hx()}</label>`).join('')}</div>`;
 
 /* ---------------- home: morning & evening check-in ---------------- */
 export function checkinHtml() {

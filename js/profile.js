@@ -1,11 +1,11 @@
 // Profile & settings.
-import { esc, inWords, uid, haptic, isIOS, HAPTIC_WAYS, setHapticWay } from './util.js';
+import { esc, inWords, uid, haptic, setHapticsOn } from './util.js';
 import { getState, update, REMIND_CHOICES, exportState, importState, resetAll, PALETTE } from './store.js';
 import { ui, sticker, STICKER_ORDER } from './icons.js';
 import { openSheet, ask, toast, toggle, segIndicator, saveFile } from './ui.js';
 import { askPermission, notifState, isStandalone, updateBadge } from './notify.js';
 
-export const VERSION = '1.3.6';
+export const VERSION = '1.3.7';
 
 /** resolve "auto" against the phone setting and paint the theme */
 export function applyTheme() {
@@ -113,34 +113,6 @@ export function bindRestore(root) {
   });
 }
 
-/** a small test bench: which way of making the phone tick works here */
-function openHapticTest() {
-  const info = `iPhone: ${isIOS() ? 'так' : 'ні'} · API вібрації: ${typeof navigator.vibrate === 'function' ? 'є' : 'немає'} · застосунок з початкового екрана: ${window.navigator.standalone || matchMedia('(display-mode: standalone)').matches ? 'так' : 'ні'}`;
-  const cur = (() => { try { return localStorage.getItem('planik:haptic') || 'auto'; } catch (e) { return 'auto'; } })();
-  openSheet({
-    title: 'Перевірка вібрації',
-    html: `<p class="small muted" style="margin:0 4px 14px">Натискай по черзі й відмічай, де відчуваєш тік. Обраний спосіб Planik запамʼятає.</p>
-      <div class="hp-row"><span class="grow"><b>0. Справжній перемикач</b><span>перемкни сам — так iPhone відгукується завжди</span></span><input type="checkbox" switch class="hp-switch"></div>
-      ${[['a', '1. Спосіб А', 'прихований перемикач, створюється на мить'], ['b', '2. Спосіб Б', 'прихований перемикач, що живе на сторінці'], ['vibrate', '3. Вібрація Android', 'стандартна вебвібрація']].map(([k, t, d]) => `
-        <div class="hp-row"><span class="grow"><b>${t}</b><span>${d}</span></span><button class="btn btn-sand btn-sm" data-hp="${k}">Тік</button><button class="chip" data-hpuse="${k}" aria-pressed="${cur === k}">Обрати</button></div>`).join('')}
-      <div class="hp-row"><span class="grow"><b>4. Із затримкою</b><span>спосіб А через пів секунди — так працює гул кулі</span></span><button class="btn btn-sand btn-sm" data-hpdelay>Тік</button></div>
-      <p class="small" style="margin:16px 4px 8px;font-weight:800">Нові: твій дотик сам перемикає прихований перемикач</p>
-      <div class="hp-row"><span class="grow"><b>5. Кнопка-мітка</b><span>під кнопкою прозорий перемикач</span></span><label class="btn btn-sand btn-sm hp-lab">Тік<input type="checkbox" switch class="hp-in-op"></label></div>
-      <div class="hp-row"><span class="grow"><b>6. Кнопка-мітка, схований</b><span>перемикач усередині, але невидимий повністю</span></span><label class="btn btn-sand btn-sm hp-lab">Тік<input type="checkbox" switch class="hp-in-none"></label></div>
-      <div class="hp-row"><span class="grow"><b>7. Прозорий перемикач поверх</b><span>сам перемикач лежить на кнопці, просто прозорий</span></span><span class="btn btn-sand btn-sm hp-over">Тік<input type="checkbox" switch class="hp-in-over" aria-label="Тік"></span></div>
-      <div class="chips" style="margin-top:12px"><button class="chip" data-hpuse="auto" aria-pressed="${cur === 'auto'}">Автоматично</button><button class="chip" data-hpuse="off" aria-pressed="${cur === 'off'}">Вимкнути вібрацію</button></div>
-      <p class="tiny muted" style="margin:14px 4px 0">${info}</p>`,
-    onMount(s) {
-      s.body.addEventListener('click', (e) => {
-        const t = e.target.closest('[data-hp]'); if (t) { HAPTIC_WAYS[t.dataset.hp](); return; }
-        if (e.target.closest('[data-hpdelay]')) { setTimeout(() => HAPTIC_WAYS.a(), 500); return; }
-        const u = e.target.closest('[data-hpuse]');
-        if (u) { setHapticWay(u.dataset.hpuse); s.body.querySelectorAll('[data-hpuse]').forEach((x) => x.setAttribute('aria-pressed', x === u)); haptic(); toast('Запамʼятав'); }
-      });
-    }
-  });
-}
-
 export function mountProfile(el, { restartOnboarding }) {
   bindRestore(el);
   root = el;
@@ -177,7 +149,12 @@ export function mountProfile(el, { restartOnboarding }) {
     } else if (a === 'back') {
       window.dispatchEvent(new CustomEvent('planik:tab', { detail: 'home' }));
     } else if (a === 'haptic') {
-      openHapticTest();
+      const on = getState().settings.haptics === false;
+      update((st) => { st.settings.haptics = on; });
+      setHapticsOn(on);
+      renderProfile();
+      window.dispatchEvent(new CustomEvent('planik:refresh'));
+      toast(on ? 'Вібрацію увімкнено' : 'Вібрацію вимкнено');
     } else if (a === 'news') {
       import('./whatsnew.js').then((m) => m.showWhatsNew({ replay: true }));
     } else if (a === 'onboard') {
@@ -225,7 +202,7 @@ export function renderProfile() {
       <div class="set">
         <button class="set-row" data-pr="export">${ui('download')}<span class="grow">Зберегти резервну копію<span>Файл .json у Файли або iCloud</span></span></button>
         ${restoreButton('set-row', `${ui('upload')}<span class="grow">Відновити з копії</span>`)}
-        <button class="set-row" data-pr="haptic">${ui('bolt')}<span class="grow">Вібрація<span>перевірити, що працює на цьому телефоні</span></span></button>
+        <button class="set-row" data-pr="haptic">${ui('bolt')}<span class="grow">Вібрація<span>легкий відгук на дотики й передбачення</span></span>${toggle('haptic', getState().settings.haptics !== false)}</button>
         <button class="set-row" data-pr="news">${ui('spark')}<span class="grow">Що нового<span>Planik ${VERSION} у сторіз</span></span></button>
         <button class="set-row" data-pr="onboard">${ui('repeat')}<span class="grow">Пройти знайомство знову</span></button>
         <button class="set-row danger" data-pr="reset">${ui('trash')}<span class="grow">Видалити всі дані</span></button>

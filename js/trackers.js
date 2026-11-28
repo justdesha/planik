@@ -1,5 +1,5 @@
 // Habit trackers: grid of tiles, quick +/−, details, builder.
-import { esc, uid, todayYmd, ymd, addDays, parseYmd, pDays, pTimes, plural, WD_SHORT, wd, haptic, humanDate } from './util.js';
+import { esc, uid, todayYmd, ymd, addDays, parseYmd, pDays, pTimes, plural, WD_SHORT, wd, haptic, humanDate, hx } from './util.js';
 import { getState, update, trackerCount, trackerStreak, trackerDoneToday, trackerFrom, setTrackerDays } from './store.js';
 import { ui, sticker, STICKER_ORDER } from './icons.js';
 import { openSheet, ask, toast, segIndicator, toggle } from './ui.js';
@@ -40,8 +40,8 @@ export function tileHtml(t, { preview = false } = {}) {
     <div><div class="trk-num"><span data-num>${n}</span><small>${subtitle(t, n)}</small></div></div>
     ${t.goal ? `<div><div class="bar"><i style="width:${pct}%"></i></div><div class="trk-goal" style="margin-top:6px"><span>${hit ? 'Мета досягнута' : 'мета'}</span><span>${n} / ${t.goal}</span></div></div>` : ''}
     <div class="trk-act">${autoDays
-      ? `<button data-adj="-1" data-id="${t.id}" aria-label="Мінус день">${ui('minus')}</button><button class="slip" data-slip="${t.id}" aria-label="Зрив: почати рахунок заново">${ui('undo')}</button><button class="plus" data-adj="1" data-id="${t.id}" aria-label="Плюс день">${ui('plus')}</button>`
-      : `<button data-minus="${t.id}" aria-label="Мінус один">${ui('minus')}</button><button class="plus ${doneToday ? 'done' : ''}" data-plus="${t.id}" aria-label="${t.unit === 'days' ? 'Відмітити сьогодні' : 'Плюс один'}">${doneToday ? ui('check') : ui('plus')}</button>`}</div>
+      ? `<button data-adj="-1" data-id="${t.id}" aria-label="Мінус день">${ui('minus')}</button><button class="slip" data-slip="${t.id}" aria-label="Зрив: почати рахунок заново">${ui('undo')}</button><label class="plus hxl" role="button" tabindex="0" data-adj="1" data-id="${t.id}" aria-label="Плюс день">${ui('plus')}${hx()}</label>`
+      : `<button data-minus="${t.id}" aria-label="Мінус один">${ui('minus')}</button><label class="plus hxl ${doneToday ? 'done' : ''}" role="button" tabindex="0" data-plus="${t.id}" aria-label="${t.unit === 'days' ? 'Відмітити сьогодні' : 'Плюс один'}">${doneToday ? ui('check') : ui('plus')}${hx()}</label>`}</div>
   </article>`;
 }
 
@@ -57,7 +57,7 @@ export function renderTrackers() {
 }
 
 function onClick(e) {
-  const b = e.target.closest('button, [data-trk]');
+  const b = e.target.closest('button, label[role="button"], [data-trk]');
   if (!b) return;
   const st = getState();
   if (b.dataset.new !== undefined) return openBuilder();

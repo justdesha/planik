@@ -1,5 +1,5 @@
 // Event builder, event details, shared event row markup.
-import { esc, uid, todayYmd, humanDate, inWords, pad, parseYmd, ymd, MONTHS_GEN, haptic, plural } from './util.js';
+import { esc, uid, todayYmd, humanDate, inWords, pad, parseYmd, ymd, MONTHS_GEN, haptic, plural, hx } from './util.js';
 import { getState, saveEvent, deleteEvent, eventById, catById, colorOf, isDone, toggleDone, reminderOffsets, REMIND_CHOICES, occTime, update, occStatus, STATUS_LABEL, toggleCancel } from './store.js';
 import { ui, sticker } from './icons.js';
 import { openSheet, ask, toast, segIndicator, toggle, saveFile } from './ui.js';
@@ -73,7 +73,7 @@ export function eventRow({ ev, date }, { showDate = false } = {}) {
     <span class="sb c-${color}">${sticker(evIcon(ev))}</span>
     <span class="body"><span class="t">${esc(ev.title)}</span>
       <span class="m">${statusChip(st)}${ev.important && st.id !== 'cancelled' ? '<span class="tag red">Важливо</span>' : ''}${meta.map((m) => `<span>${m}</span>`).join('')}</span></span>
-    ${ev.kind === 'task' && st.id !== 'cancelled' ? `<button class="check ${done ? 'on' : ''}" data-done="${ev.id}" data-date="${date}" aria-label="${done ? 'Повернути в роботу' : 'Позначити виконаним'}">${ui('check')}</button>` : ''}
+    ${ev.kind === 'task' && st.id !== 'cancelled' ? `<label class="check hxl ${done ? 'on' : ''}" role="button" tabindex="0" data-done="${ev.id}" data-date="${date}" aria-label="${done ? 'Повернути в роботу' : 'Позначити виконаним'}">${ui('check')}${hx()}</label>` : ''}
   </div>`;
 }
 
@@ -149,7 +149,7 @@ export function openEvent(id, date, rerender) {
       ${ev.notes ? `<div class="det-row">${ui('note')}<div style="white-space:pre-wrap;-webkit-user-select:text;user-select:text">${esc(ev.notes)}</div></div>` : ''}
     </div>
     ${cl.length ? `<div class="card"><div class="card-h"><h3 class="h3">Підготувати й купити</h3><span class="small muted">${cl.filter((c) => c.done).length} з ${cl.length}</span></div>
-      ${cl.map((c) => `<button class="cl-item ${c.done ? 'on' : ''}" data-cl="${c.id}"><span class="cl-box">${ui('check')}</span><span class="cl-t">${esc(c.text)}</span></button>`).join('')}</div>` : ''}
+      ${cl.map((c) => `<label class="cl-item hxl ${c.done ? 'on' : ''}" role="button" tabindex="0" data-cl="${c.id}"><span class="cl-box">${ui('check')}</span><span class="cl-t">${esc(c.text)}</span>${hx()}</label>`).join('')}</div>` : ''}
     ${ev.amount && !(ev.bought || {})[date] ? `<button class="btn btn-deep btn-block" data-act="buy" style="margin-bottom:10px">${ui('bag')}Куплено — записати витрату</button>` : ''}
     ${ev.kind === 'task' ? `<button class="btn ${done ? 'btn-sand' : 'btn-acc'} btn-block" data-act="done" style="margin-bottom:10px">${ui('check')}${done ? 'Повернути в роботу' : 'Позначити виконаним'}</button>` : ''}
     ${(() => {

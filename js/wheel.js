@@ -1,5 +1,5 @@
 // Колесо балансу: eight areas of life scored 1–10 once a month, drawn as a petal donut.
-import { MONTHS, MONTHS_GEN, todayYmd, esc, haptic, parseYmd, addMonths, ymd } from './util.js';
+import { MONTHS, MONTHS_GEN, todayYmd, esc, haptic, parseYmd, addMonths, ymd, hx } from './util.js';
 import { getState, update } from './store.js';
 import { sticker, ui } from './icons.js';
 import { openSheet, toast } from './ui.js';
@@ -68,7 +68,7 @@ export function wheelCardHtml() {
   const today = todayYmd(), editable = w.at && w.at.slice(0, 10) === today;
   return `<section class="card wheel-card"><div class="card-h"><div><h3 class="h3">Колесо балансу</h3><span class="small muted">${monthName(k)} · середнє ${avg(w.sc).toFixed(1).replace('.', ',')}</span></div>
       ${past ? `<button class="btn btn-sand btn-sm" data-wh="archive">Минулі</button>` : ''}</div>
-    <button class="wheel-wrap" data-wh="${editable ? 'edit' : 'view'}" aria-label="Колесо балансу">${wheelSvg(w.sc, { size: 250 })}</button>
+    <button class="wheel-wrap big" data-wh="${editable ? 'edit' : 'view'}" aria-label="Колесо балансу">${wheelSvg(w.sc, { size: 340 })}</button>
     ${(() => { const r = readWheel(w.sc, AREAS, prevWheel(k)); return `<button class="wh-level-mini t-${r.level.tone}" data-wh="result"><b>${r1(r.avg)}</b><span><strong>${r.title}</strong><small>фокус місяця: ${esc(r.focus.name.toLowerCase())}${(w.notes || []).length ? ` · ${w.notes.length} ${w.notes.length === 1 ? 'відповідь' : w.notes.length < 5 ? 'відповіді' : 'відповідей'}` : ''}</small></span>${ui('right')}</button>`; })()}
     <p class="tiny muted" style="margin:10px 2px 0">${editable ? 'Сьогодні ще можна виправити: торкнись колеса.' : `Наступне оцінювання — з 1 ${MONTHS_GEN[+addMonths(parseYmd(k + '-01'), 1).getMonth()]}.`}</p></section>`;
 }
@@ -91,11 +91,11 @@ export function openWheelEdit(after) {
   if (old && !(old.at && old.at.slice(0, 10) === todayYmd())) { toast(`Колесо за ${monthName(k).toLowerCase()} уже є`); return openWheelView(k); }
   const sc = old ? { ...old.sc } : {};
   const rows = () => AREAS.map((a) => `<div class="wh-row"><div class="wh-row-h"><span class="sb sm c-${a.color}">${sticker(a.icon)}</span><b>${a.name}</b><span class="wh-v">${sc[a.id] || '—'}</span></div>
-      <div class="wheel-edit" role="group" aria-label="${a.name}">${Array.from({ length: 10 }, (_, i) => `<button type="button" class="wh-dot ${sc[a.id] >= i + 1 ? 'on' : ''}" data-a="${a.id}" data-v="${i + 1}" style="--c:var(--${a.color})" aria-label="${i + 1}">${i + 1}</button>`).join('')}</div></div>`).join('');
+      <div class="wheel-edit" role="group" aria-label="${a.name}">${Array.from({ length: 10 }, (_, i) => `<label class="wh-dot hxl ${sc[a.id] >= i + 1 ? 'on' : ''}" role="button" data-a="${a.id}" data-v="${i + 1}" style="--c:var(--${a.color})" aria-label="${i + 1}">${i + 1}${hx()}</label>`).join('')}</div></div>`).join('');
   openSheet({
     full: true,
     title: `Колесо · ${monthName(k).toLowerCase()}`,
-    html: `<div class="wheel-wrap sticky" id="whPrev">${wheelSvg(sc, { size: 200, anim: false })}</div>
+    html: `<div class="wheel-wrap sticky" id="whPrev">${wheelSvg(sc, { size: 230, anim: false })}</div>
       <p class="small muted" style="margin:0 4px 14px">Не думай довго: як відчувається саме зараз. 1 — зовсім погано, 10 — краще не буває.</p>
       <div id="whRows">${rows()}</div>`,
     foot: '<button class="btn btn-acc btn-block" id="whSave">Зберегти колесо</button>',
@@ -106,7 +106,7 @@ export function openWheelEdit(after) {
         const row = d.closest('.wh-row');
         row.querySelectorAll('.wh-dot').forEach((x) => x.classList.toggle('on', +x.dataset.v <= sc[d.dataset.a]));
         row.querySelector('.wh-v').textContent = sc[d.dataset.a];
-        s.body.querySelector('#whPrev').innerHTML = wheelSvg(sc, { size: 200, anim: false });
+        s.body.querySelector('#whPrev').innerHTML = wheelSvg(sc, { size: 230, anim: false });
       });
       s.el.querySelector('#whSave').addEventListener('click', () => {
         const miss = AREAS.filter((a) => !sc[a.id]);
@@ -133,7 +133,7 @@ export function openWheelResult(k, after) {
   const r = readWheel(w.sc, AREAS, prev);
   const html = () => {
     const ww = wheelOf(k);
-    return `<div class="wheel-wrap">${wheelSvg(ww.sc, { size: 240 })}</div>
+    return `<div class="wheel-wrap big">${wheelSvg(ww.sc, { size: 350 })}</div>
     <section class="wh-level t-${r.level.tone}"><div class="wh-level-top"><b>${r1(r.avg)}</b><span>середнє з 10</span></div>
       <h3>${r.title}</h3><p>${esc(r.text)}</p><p>${esc(r.shape)}</p>${r.trend ? `<p class="wh-trend">${esc(r.trend.text)}</p>` : ''}</section>
     <section class="wh-focus"><span class="sb c-${r.focus.color}">${sticker(r.focus.icon)}</span><div><small>фокус місяця · ${esc(r.focus.name.toLowerCase())}</small><b>${esc(r.step)}</b></div></section>

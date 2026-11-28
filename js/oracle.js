@@ -1,5 +1,5 @@
 // Передбачення дня: one prediction a day, opened by shaking the phone over a plasma ball.
-import { todayYmd, parseYmd, esc, haptic, hapticPattern, MONTHS_GEN, reduceMotion } from './util.js';
+import { todayYmd, parseYmd, esc, haptic, hapticPattern, MONTHS_GEN, reduceMotion, hx, isIOS, tapTicks } from './util.js';
 import { getState, update } from './store.js';
 import { ui, sticker } from './icons.js';
 import { ORACLE } from './oracle-data.js';
@@ -104,10 +104,10 @@ export async function openOracle(after) {
   el.className = 'orb-screen';
   el.innerHTML = `
     <div class="orb-top"><span class="orb-date">${dt.getDate()} ${MONTHS_GEN[dt.getMonth()]}</span><button class="orb-x" aria-label="Закрити">${ui('close')}</button></div>
-    <div class="orb-stage"><div class="orb-ball"><canvas></canvas></div></div>
+    <div class="orb-stage"><label class="orb-ball hxl" role="button" tabindex="0" aria-label="Куля"><canvas></canvas>${hx()}</label></div>
     <div class="orb-read"><p class="orb-kicker">передбачення на ${dt.getDate()} ${MONTHS_GEN[dt.getMonth()]}</p><p class="orb-text"></p></div>
     <div class="orb-foot"><p class="orb-hint">${motion ? '<span class="orb-shake">' + sticker('phone') + '</span>Струсни телефон' : 'Торкнись кулі'}</p>
-      <button class="orb-tap">${motion ? 'або торкнись кулі' : ''}</button></div>`;
+      <label class="orb-tap hxl" role="button">${motion ? 'або торкнись кулі' : ''}${hx()}</label></div>`;
   document.body.append(el);
   document.body.style.overflow = 'hidden';
   requestAnimationFrame(() => el.classList.add('on'));
@@ -130,7 +130,7 @@ export async function openOracle(after) {
     setTimeout(resize, instant ? 50 : 1300);
     text.classList.add('on');
     const foot = el.querySelector('.orb-foot');
-    foot.innerHTML = '<p class="orb-hint small">Нове передбачення — завтра</p><button class="orb-done">Дякую</button>';
+    foot.innerHTML = `<p class="orb-hint small">Нове передбачення — завтра</p><label class="orb-done hxl" role="button" tabindex="0">Дякую${hx()}</label>`;
     foot.classList.remove('gone');
     foot.classList.add('end');
     if (!instant) {
@@ -141,8 +141,16 @@ export async function openOracle(after) {
   };
   if (was) { plasma.calm(); showText(true); }
 
-  const reveal = () => {
+  // iPhone can tick only under a finger: shaking charges the ball, the tap opens it with a knock
+  const charge = () => {
     if (state !== 'idle') return;
+    state = 'charged';
+    plasma.charge();
+    const f = el.querySelector('.orb-foot');
+    f.innerHTML = '<p class="orb-hint charged">Куля заряджена. Торкнись її</p>';
+  };
+  const reveal = () => {
+    if (state !== 'idle' && state !== 'charged') return;
     state = 'burst';
     plasma.burst();
     el.querySelector('.orb-foot').classList.add('gone');
@@ -174,7 +182,7 @@ export async function openOracle(after) {
         hits = hits.filter((h) => now - h < 1000); hits.push(now);
         plasma.poke();
         if (state === 'idle') haptic(18);
-        if (hits.length >= 2) reveal();
+        if (hits.length >= 2) { if (isIOS() && tapTicks()) charge(); else reveal(); }
       }
     }
     last = { x: a.x, y: a.y, z: a.z };
@@ -191,7 +199,7 @@ export async function openOracle(after) {
   };
   el.addEventListener('click', (e) => {
     if (e.target.closest('.orb-x, .orb-done')) return close();
-    if (e.target.closest('.orb-ball, .orb-tap')) { if (state === 'idle') reveal(); else { plasma.poke(); haptic(10); } }
+    if (e.target.closest('.orb-ball, .orb-tap')) { if (state === 'idle' || state === 'charged') reveal(); else { plasma.poke(); haptic(10); } }
   });
 }
 
@@ -287,6 +295,7 @@ function startPlasma(canvas) {
     poke() { target = Math.min(1.4, target + .35); setTimeout(() => { if (target > .6) target = .6; }, 500); },
     burst() { target = 1.6; setTimeout(() => { flash = .9; }, 900); },
     calm() { target = .32; },
+    charge() { target = 1.15; },
     resize() { size(); },
     stop() { alive = false; cancelAnimationFrame(raf); removeEventListener('resize', size); }
   };
