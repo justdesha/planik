@@ -76,6 +76,42 @@ export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-export function haptic(ms = 8) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* iOS ignores */ } }
+/*
+ * Haptics. Android: the Vibration API. iPhone has no such API for web apps, but since iOS 18
+ * toggling a native switch (<input type="checkbox" switch>) gives a real Taptic tick —
+ * we toggle a hidden one. Older iPhones simply stay silent.
+ */
+let hapticLabel = null;
+function iosTick() {
+  if (!hapticLabel) {
+    hapticLabel = document.createElement('label');
+    hapticLabel.setAttribute('aria-hidden', 'true');
+    hapticLabel.style.cssText = 'position:fixed;left:-200px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    const i = document.createElement('input');
+    i.type = 'checkbox'; i.setAttribute('switch', ''); i.tabIndex = -1;
+    hapticLabel.append(i);
+    hapticLabel.addEventListener('click', (e) => e.stopPropagation());
+    i.addEventListener('change', (e) => e.stopPropagation());
+    document.body.append(hapticLabel);
+  }
+  // a label click moves focus to the switch; give it back so a typed field keeps its keyboard
+  const prev = document.activeElement;
+  hapticLabel.click();
+  if (prev && prev !== document.body && prev !== document.activeElement && prev.focus) prev.focus({ preventScroll: true });
+}
+const canVibrate = () => typeof navigator.vibrate === 'function';
+export function haptic(ms = 8) {
+  try { if (canVibrate()) navigator.vibrate(ms); else iosTick(); } catch (e) { /* no haptics here */ }
+}
+/** a rhythm: ticks at the given moments (ms from now); on Android each tick lasts `len` */
+export function hapticPattern(times, len = 12) {
+  try {
+    if (canVibrate()) {
+      const pat = []; let prev = 0;
+      times.forEach((t, i) => { if (i) pat.push(Math.max(10, t - prev - len)); pat.push(len); prev = t; });
+      navigator.vibrate(pat);
+    } else times.forEach((t) => (t ? setTimeout(iosTick, t) : iosTick()));
+  } catch (e) { /* no haptics here */ }
+}
 
 export const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;

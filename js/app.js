@@ -9,7 +9,7 @@ import { mountProfile, renderProfile } from './profile.js';
 import { mountMoney, renderMoney, moneyHasData, moneySlides } from './money.js';
 import { setExtraData, setExtraSlides } from './stories.js';
 import { maybeWhatsNew } from './whatsnew.js';
-import { wheelSlide, openWheelEdit } from './wheel.js';
+import { wheelSlides, openWheelEdit } from './wheel.js';
 import { runOnboarding } from './onboarding.js';
 import { openEventForm, openEvent, liveTick } from './events.js';
 import { tick } from './notify.js';
@@ -176,7 +176,7 @@ function start() {
   const st = getState();
   refresh();
   setExtraData(moneyHasData);
-  setExtraSlides((p) => [...moneySlides(p), wheelSlide(p)].filter(Boolean));
+  setExtraSlides((p) => [...moneySlides(p), ...wheelSlides(p)].filter(Boolean));
   if (!st.user.onboarded) runOnboarding(() => refresh());
   else setTimeout(maybeWhatsNew, 600);
   openFromHash();

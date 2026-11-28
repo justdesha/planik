@@ -3,6 +3,7 @@ import { MONTHS, MONTHS_GEN, todayYmd, esc, haptic, parseYmd, addMonths, ymd } f
 import { getState, update } from './store.js';
 import { sticker, ui } from './icons.js';
 import { openSheet, toast } from './ui.js';
+import { readWheel, AREA_TEXT } from './wheel-insight.js';
 
 export const AREAS = [
   { id: 'health', name: 'Здоровʼя', icon: 'heart', color: 'red' },
@@ -68,7 +69,7 @@ export function wheelCardHtml() {
   return `<section class="card wheel-card"><div class="card-h"><div><h3 class="h3">Колесо балансу</h3><span class="small muted">${monthName(k)} · середнє ${avg(w.sc).toFixed(1).replace('.', ',')}</span></div>
       ${past ? `<button class="btn btn-sand btn-sm" data-wh="archive">Минулі</button>` : ''}</div>
     <button class="wheel-wrap" data-wh="${editable ? 'edit' : 'view'}" aria-label="Колесо балансу">${wheelSvg(w.sc, { size: 250 })}</button>
-    <div class="wh-sum"><span><i style="background:var(--${sorted[0].color})"></i>найсильніше: <b>${esc(sorted[0].name.toLowerCase())}</b></span><span><i style="background:var(--${sorted[7].color})"></i>просідає: <b>${esc(sorted[7].name.toLowerCase())}</b></span></div>
+    ${(() => { const r = readWheel(w.sc, AREAS, prevWheel(k)); return `<button class="wh-level-mini t-${r.level.tone}" data-wh="result"><b>${r1(r.avg)}</b><span><strong>${r.title}</strong><small>фокус місяця: ${esc(r.focus.name.toLowerCase())}${(w.notes || []).length ? ` · ${w.notes.length} ${w.notes.length === 1 ? 'відповідь' : w.notes.length < 5 ? 'відповіді' : 'відповідей'}` : ''}</small></span>${ui('right')}</button>`; })()}
     <p class="tiny muted" style="margin:10px 2px 0">${editable ? 'Сьогодні ще можна виправити: торкнись колеса.' : `Наступне оцінювання — з 1 ${MONTHS_GEN[+addMonths(parseYmd(k + '-01'), 1).getMonth()]}.`}</p></section>`;
 }
 
@@ -79,7 +80,7 @@ export function bindWheel(root, rerender) {
     haptic();
     if (b.dataset.wh === 'edit') openWheelEdit(rerender);
     if (b.dataset.wh === 'archive') openArchive();
-    if (b.dataset.wh === 'view') openWheelView(curKey());
+    if (b.dataset.wh === 'view' || b.dataset.wh === 'result') openWheelResult(curKey(), rerender);
   });
 }
 
@@ -112,27 +113,97 @@ export function openWheelEdit(after) {
         if (miss.length) { haptic(30); return toast(`Ще ${miss.length === 1 ? 'одна сфера' : miss.length + ' сфер'}: ${miss.map((a) => a.name.toLowerCase()).join(', ')}`); }
         update((st) => { st.wheel = st.wheel || {}; st.wheel[k] = { sc: { ...sc }, at: new Date().toISOString() }; });
         haptic(15); s.close(); after && after();
-        toast('Колесо збережено');
+        setTimeout(() => openWheelResult(k, after), 380);
       });
     }
   });
 }
 
-/* ---------- one month, with the change since the previous wheel ---------- */
+/* ---------- one month: the reading ---------- */
+const r1 = (x) => x.toFixed(1).replace('.', ',');
+const MONTHS_INS = ['січнем', 'лютим', 'березнем', 'квітнем', 'травнем', 'червнем', 'липнем', 'серпнем', 'вереснем', 'жовтнем', 'листопадом', 'груднем'];
 function prevKey(k) { return Object.keys(W()).filter((x) => x < k).sort().pop(); }
-export function openWheelView(k) {
+const prevWheel = (k) => { const pk = prevKey(k); return pk ? W()[pk].sc : null; };
+const areaById = (id) => AREAS.find((a) => a.id === id);
+const notesHtml = (w) => (w.notes || []).length ? `<details class="wh-notes"><summary>Мої відповіді · ${w.notes.length}</summary>${w.notes.map((n) => `<p><b>${esc(n.q)}</b>${esc(n.a)}</p>`).join('')}</details>` : '';
+
+export function openWheelResult(k, after) {
   const w = wheelOf(k); if (!w) return;
-  const pk = prevKey(k), pw = pk && wheelOf(pk);
+  const pk = prevKey(k), prev = pk ? W()[pk].sc : null;
+  const r = readWheel(w.sc, AREAS, prev);
+  const html = () => {
+    const ww = wheelOf(k);
+    return `<div class="wheel-wrap">${wheelSvg(ww.sc, { size: 240 })}</div>
+    <section class="wh-level t-${r.level.tone}"><div class="wh-level-top"><b>${r1(r.avg)}</b><span>середнє з 10</span></div>
+      <h3>${r.title}</h3><p>${esc(r.text)}</p><p>${esc(r.shape)}</p>${r.trend ? `<p class="wh-trend">${esc(r.trend.text)}</p>` : ''}</section>
+    <section class="wh-focus"><span class="sb c-${r.focus.color}">${sticker(r.focus.icon)}</span><div><small>фокус місяця · ${esc(r.focus.name.toLowerCase())}</small><b>${esc(r.step)}</b></div></section>
+    <div class="wh-cols">
+      <section class="wh-col"><h4>${r.strongRel ? 'Найкраще зараз' : 'Що круто'}</h4>${r.strong.map((a) => `<div class="wh-pill"><span class="sb sm c-${a.color}">${sticker(a.icon)}</span><span class="grow">${a.name}</span><b>${a.v}</b></div>`).join('')}</section>
+      <section class="wh-col"><h4>${r.weakRel ? 'Можна підтягнути' : 'Варто подумати'}</h4>${r.weak.map((a) => `<div class="wh-pill"><span class="sb sm c-${a.color}">${sticker(a.icon)}</span><span class="grow">${a.name}</span><b>${a.v}</b></div>`).join('')}</section>
+    </div>
+    ${r.weak.slice(1).map((a) => `<p class="wh-step"><b>${a.name}:</b> ${esc(AREA_TEXT[a.id].step)}</p>`).join('')}
+    ${prev ? `<section class="card wh-cmp"><div class="card-h"><h3 class="h3">Порівняно з ${MONTHS_INS[+pk.slice(5, 7) - 1]}</h3></div>
+      <div class="wh-list">${AREAS.map((a) => { const v = ww.sc[a.id], d = v - (prev[a.id] || 0);
+        return `<div class="wh-li"><span class="sb sm c-${a.color}">${sticker(a.icon)}</span><span class="grow">${a.name}</span>${d ? `<span class="wh-d ${d > 0 ? 'up' : 'dn'}">${d > 0 ? '▲ +' : '▼ −'}${Math.abs(d)}</span>` : '<span class="wh-d eq">=</span>'}<b>${v}</b></div>`; }).join('')}</div></section>` : ''}
+    <section class="card wh-qs"><div class="card-h"><h3 class="h3">Питання для себе</h3></div>
+      <ul>${r.questions.map((q) => `<li>${esc(q.q)}</li>`).join('')}</ul>
+      <button class="btn btn-ink btn-block" data-refl>${ui('note')}Відповісти на картках</button>
+      ${notesHtml(ww)}</section>
+    ${k === curKey() && ww.at && ww.at.slice(0, 10) === todayYmd() ? '<button class="btn btn-sand btn-block" data-whfix>Виправити оцінки</button>' : ''}`;
+  };
   openSheet({
+    full: true,
     title: `Колесо · ${monthLabel(k).toLowerCase()}`,
-    html: `<div class="wheel-wrap">${wheelSvg(w.sc, { size: 260 })}</div>
-      <div class="wh-list">${AREAS.map((a) => {
-        const v = w.sc[a.id], d = pw ? v - pw.sc[a.id] : 0;
-        return `<div class="wh-li"><span class="sb sm c-${a.color}">${sticker(a.icon)}</span><span class="grow">${a.name}</span>
-          ${pw && d ? `<span class="wh-d ${d > 0 ? 'up' : 'dn'}">${d > 0 ? '+' : '−'}${Math.abs(d)}</span>` : ''}<b>${v}</b></div>`;
-      }).join('')}</div>
-      ${pw ? `<p class="tiny muted" style="margin:10px 4px 0">Зміни порівняно з колесом за ${monthName(pk).toLowerCase()}.</p>` : ''}`
+    html: html(),
+    onMount(s) {
+      s.body.addEventListener('click', (e) => {
+        if (e.target.closest('[data-refl]')) { haptic(); openReflection(k, r.questions, () => { s.setHtml(html()); after && after(); }); }
+        if (e.target.closest('[data-whfix]')) { s.close(); setTimeout(() => openWheelEdit(after), 380); }
+      });
+    }
   });
+}
+export const openWheelView = (k) => openWheelResult(k);
+
+/* ---------- reflection cards: full screen, one question at a time ---------- */
+export function openReflection(k, questions, done) {
+  const w = wheelOf(k); if (!w) return;
+  const answers = {};
+  for (const n of w.notes || []) answers[n.q] = n.a;
+  let i = 0;
+  const el = document.createElement('div');
+  el.className = 'refl';
+  document.body.append(el);
+  document.body.style.overflow = 'hidden';
+  const render = (dir = 1) => {
+    const q = questions[i], a = q.area ? areaById(q.area) : null;
+    el.dataset.tone = a ? a.color : 'cobalt';
+    el.innerHTML = `<div class="refl-top"><div class="refl-bars">${questions.map((_, j) => `<i class="${j < i ? 'done' : j === i ? 'on' : ''}"></i>`).join('')}</div><button class="refl-x" aria-label="Закрити">${ui('close')}</button></div>
+      <div class="refl-card ${dir < 0 ? 'back' : ''}">${a ? `<span class="refl-area"><span class="sb sm c-${a.color}">${sticker(a.icon)}</span>${a.name}</span>` : '<span class="refl-area">про колесо загалом</span>'}
+        <h2>${esc(q.q)}</h2>
+        <textarea class="refl-in" placeholder="Пиши як є, це бачиш лише ти">${esc(answers[q.q] || '')}</textarea></div>
+      <div class="refl-foot">${i ? `<button class="refl-back" aria-label="Назад">${ui('left')}</button>` : '<span></span>'}
+        <button class="btn btn-ghost refl-skip">Пропустити</button><button class="btn btn-acc refl-next">${i === questions.length - 1 ? 'Зберегти' : 'Далі'}</button></div>`;
+    setTimeout(() => el.querySelector('.refl-in')?.focus({ preventScroll: true }), 420);
+  };
+  const keep = () => { const v = el.querySelector('.refl-in').value.trim(); const q = questions[i].q; if (v) answers[q] = v; else delete answers[q]; };
+  const finish = () => {
+    const notes = questions.filter((q) => answers[q.q]).map((q) => ({ q: q.q, a: answers[q.q], area: q.area }));
+    update((s) => { s.wheel[k].notes = notes; });
+    el.classList.remove('on'); document.body.style.overflow = '';
+    setTimeout(() => el.remove(), 350);
+    haptic(15);
+    toast(notes.length ? `Збережено ${notes.length} ${notes.length === 1 ? 'відповідь' : notes.length < 5 ? 'відповіді' : 'відповідей'}` : 'Відповідей немає, нічого не збережено');
+    done && done();
+  };
+  el.addEventListener('click', (e) => {
+    if (e.target.closest('.refl-x')) { keep(); return finish(); }
+    if (e.target.closest('.refl-next')) { keep(); haptic(); if (i < questions.length - 1) { i++; render(1); } else finish(); }
+    if (e.target.closest('.refl-skip')) { haptic(); if (i < questions.length - 1) { i++; render(1); } else finish(); }
+    if (e.target.closest('.refl-back')) { keep(); i--; render(-1); }
+  });
+  render();
+  requestAnimationFrame(() => el.classList.add('on'));
 }
 
 /* ---------- archive ---------- */
@@ -153,16 +224,31 @@ export function wheelReminder(now = new Date()) {
   return { id: `wheel|${k}`, type: 'wheel', at: new Date(now.getFullYear(), now.getMonth(), 25, 10, 0), month: monthName(k) };
 }
 
-/* ---------- monthly summary story ---------- */
-export function wheelSlide(p) {
-  if (p.kind !== 'month') return null;
-  const w = wheelOf(p.from.slice(0, 7));
-  if (!w) return null;
-  const sorted = AREAS.map((a) => ({ ...a, v: w.sc[a.id] })).sort((x, y) => y.v - x.v);
-  return {
+/* ---------- monthly summary story: the wheel and, if there is one, the comparison ---------- */
+export function wheelSlides(p) {
+  if (p.kind !== 'month') return [];
+  const k = p.from.slice(0, 7);
+  const w = wheelOf(k);
+  if (!w) return [];
+  const pk = prevKey(k), prev = pk ? W()[pk].sc : null;
+  const r = readWheel(w.sc, AREAS, prev);
+  const out = [{
     bg: 'cream',
-    html: `<div class="sx-mid"><p class="sx-kicker">колесо балансу</p><h2 class="sx-h">Середнє ${avg(w.sc).toFixed(1).replace('.', ',')} з 10</h2>
-      <div class="sx-wheel">${wheelSvg(w.sc, { size: 250 })}</div>
-      <p class="sx-text">Найсильніше — ${sorted[0].name.toLowerCase()}, найбільше уваги просить ${sorted[7].name.toLowerCase()}.</p></div>`
-  };
+    html: `<div class="sx-mid"><p class="sx-kicker">колесо балансу</p><h2 class="sx-h">${r.title} · ${r1(r.avg)}</h2>
+      <div class="sx-wheel">${wheelSvg(w.sc, { size: 240 })}</div>
+      <p class="sx-text">Найсильніше — ${r.strong[0].name.toLowerCase()}. Фокус — ${r.focus.name.toLowerCase()}.</p></div>`
+  }];
+  if (prev) {
+    const moves = AREAS.map((a) => ({ ...a, v: w.sc[a.id], d: w.sc[a.id] - (prev[a.id] || 0) }));
+    const up = moves.filter((m) => m.d > 0).length, dn = moves.filter((m) => m.d < 0).length;
+    out.push({
+      bg: 'butter',
+      html: `<div class="sx-mid"><p class="sx-kicker">колесо · ${monthName(pk).toLowerCase()} → ${monthName(k).toLowerCase()}</p>
+        <h2 class="sx-h">${r.trend.d >= .25 ? 'Колесо підросло' : r.trend.d <= -.25 ? 'Колесо просіло' : 'Майже без змін'}</h2>
+        <div class="sx-cmp">${moves.map((m, i) => `<div class="sx-cmp-r" style="--d:${i * 70}ms"><span class="sb sm c-${m.color}">${sticker(m.icon)}</span><span class="grow">${m.name}</span>
+          <span class="sx-cmp-v">${prev[m.id]}<i>→</i><b>${m.v}</b></span><span class="sx-cmp-d ${m.d > 0 ? 'up' : m.d < 0 ? 'dn' : ''}">${m.d > 0 ? '▲' + m.d : m.d < 0 ? '▼' + (-m.d) : '='}</span></div>`).join('')}</div>
+        <p class="sx-text">${up} ${up === 1 ? 'сфера' : up > 1 && up < 5 ? 'сфери' : 'сфер'} підросли, ${dn} — просіли. Середнє: ${r1(r.avg - r.trend.d)} → ${r1(r.avg)}.</p></div>`
+    });
+  }
+  return out;
 }

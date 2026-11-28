@@ -1,5 +1,5 @@
 // Передбачення дня: one prediction a day, opened by shaking the phone over a plasma ball.
-import { todayYmd, parseYmd, esc, haptic, MONTHS_GEN, reduceMotion } from './util.js';
+import { todayYmd, parseYmd, esc, haptic, hapticPattern, MONTHS_GEN, reduceMotion } from './util.js';
 import { getState, update } from './store.js';
 import { ui, sticker } from './icons.js';
 import { ORACLE } from './oracle-data.js';
@@ -59,9 +59,10 @@ export async function openOracle(after) {
   el.className = 'orb-screen';
   el.innerHTML = `
     <div class="orb-top"><span class="orb-date">${dt.getDate()} ${MONTHS_GEN[dt.getMonth()]}</span><button class="orb-x" aria-label="Закрити">${ui('close')}</button></div>
-    <div class="orb-stage"><div class="orb-ball"><canvas></canvas><p class="orb-text"></p></div></div>
-    <div class="orb-foot"><p class="orb-hint">${was ? 'Нове передбачення — завтра' : motion ? '<span class="orb-shake">' + sticker('phone') + '</span>Струсни телефон' : 'Торкнись кулі'}</p>
-      ${was ? '' : `<button class="orb-tap">${motion ? 'або торкнись кулі' : ''}</button>`}</div>`;
+    <div class="orb-stage"><div class="orb-ball"><canvas></canvas></div></div>
+    <div class="orb-read"><p class="orb-kicker">передбачення на ${dt.getDate()} ${MONTHS_GEN[dt.getMonth()]}</p><p class="orb-text"></p></div>
+    <div class="orb-foot"><p class="orb-hint">${motion ? '<span class="orb-shake">' + sticker('phone') + '</span>Струсни телефон' : 'Торкнись кулі'}</p>
+      <button class="orb-tap">${motion ? 'або торкнись кулі' : ''}</button></div>`;
   document.body.append(el);
   document.body.style.overflow = 'hidden';
   requestAnimationFrame(() => el.classList.add('on'));
@@ -69,28 +70,46 @@ export async function openOracle(after) {
   const canvas = el.querySelector('canvas');
   const plasma = startPlasma(canvas);
   const text = el.querySelector('.orb-text');
+  const ball = el.querySelector('.orb-ball');
   let state = was ? 'shown' : 'idle';
-  if (was) { text.innerHTML = words(oracleFor(t)); text.classList.add('on', 'instant'); el.querySelector('.orb-ball').classList.add('shown'); plasma.calm(); }
+
+  /** the ball grows into a huge circle in the top half, the words surface below it */
+  const showText = (instant) => {
+    el.classList.add('revealed');
+    if (instant) el.classList.add('instant');
+    const ws = oracleFor(t).split(' ');
+    text.innerHTML = words(oracleFor(t));
+    // re-measure the canvas once the ball has grown, so it stays sharp
+    const resize = () => plasma.resize();
+    ball.addEventListener('transitionend', resize, { once: true });
+    setTimeout(resize, instant ? 50 : 1300);
+    text.classList.add('on');
+    const foot = el.querySelector('.orb-foot');
+    foot.innerHTML = '<p class="orb-hint small">Нове передбачення — завтра</p><button class="orb-done">Дякую</button>';
+    foot.classList.remove('gone');
+    foot.classList.add('end');
+    if (!instant) {
+      // a soft tick for every word as it surfaces
+      const start = 650;
+      hapticPattern(ws.map((_, i) => start + i * 90), 8);
+    }
+  };
+  if (was) { plasma.calm(); showText(true); }
 
   const reveal = () => {
     if (state !== 'idle') return;
     state = 'burst';
-    haptic(40);
     plasma.burst();
     el.querySelector('.orb-foot').classList.add('gone');
+    // a rumble that speeds up, as if the ball charges…
+    hapticPattern([0, 170, 310, 420, 510, 585, 645, 695, 735, 770, 800, 825, 848, 868, 886], 14);
     setTimeout(() => {
+      // …and a heavy double knock when it bursts open
+      hapticPattern([0, 45, 90, 200], 40);
       update((s) => { s.oracle = s.oracle || {}; s.oracle[t] = Date.now(); });
-      text.innerHTML = words(oracleFor(t));
-      text.classList.add('on');
-      el.querySelector('.orb-ball').classList.add('shown');
       plasma.calm();
-      haptic(15);
       state = 'shown';
-      setTimeout(() => {
-        const f = el.querySelector('.orb-foot');
-        f.innerHTML = '<p class="orb-hint">Нове передбачення — завтра</p><button class="orb-done">Дякую</button>';
-        f.classList.remove('gone');
-      }, 1400);
+      showText(false);
     }, reduceMotion() ? 200 : 1300);
   };
 
@@ -105,6 +124,7 @@ export async function openOracle(after) {
         const now = Date.now();
         hits = hits.filter((h) => now - h < 1000); hits.push(now);
         plasma.poke();
+        if (state === 'idle') haptic(18);
         if (hits.length >= 2) reveal();
       }
     }
@@ -122,7 +142,7 @@ export async function openOracle(after) {
   };
   el.addEventListener('click', (e) => {
     if (e.target.closest('.orb-x, .orb-done')) return close();
-    if (e.target.closest('.orb-ball, .orb-tap')) { if (state === 'idle') reveal(); else plasma.poke(); }
+    if (e.target.closest('.orb-ball, .orb-tap')) { if (state === 'idle') reveal(); else { plasma.poke(); haptic(10); } }
   });
 }
 
@@ -170,6 +190,8 @@ function startPlasma(canvas) {
   const frame = (now) => {
     if (!alive) return;
     tm = now;
+    // the ball grows on reveal: keep the canvas as big as it is on screen
+    if (Math.abs(canvas.clientWidth * dpr - W) > 2) size();
     energy += (target - energy) * .06;
     if (flash > 0) flash *= .92;
     ctx.save();
@@ -216,6 +238,7 @@ function startPlasma(canvas) {
     poke() { target = Math.min(1.4, target + .35); setTimeout(() => { if (target > .6) target = .6; }, 500); },
     burst() { target = 1.6; setTimeout(() => { flash = .9; }, 900); },
     calm() { target = .32; },
+    resize() { size(); },
     stop() { alive = false; cancelAnimationFrame(raf); removeEventListener('resize', size); }
   };
 }

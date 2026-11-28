@@ -71,11 +71,11 @@ DECKS['1.3.0'] = () => [
   { bg: 'ink', html: `
     <div class="sx-mid"><p class="sx-kicker">щодня</p><h2 class="sx-h" style="color:var(--butter)">Передбачення дня</h2>
       <div class="wn-orb"><span class="orb-mini" aria-hidden="true"><i></i><i></i><i></i></span></div>
-      <ol class="wn-steps"><li><span>Торкнись картки <b>Передбачення дня</b> на головному</span></li><li><span><b>Струсни телефон</b> — куля спалахне і покаже передбачення</span></li><li><span>Одне на день, без переобрання. Минулі живуть у днях календаря</span></li></ol></div>` },
+      <ol class="wn-steps"><li><span>Торкнись картки <b>Передбачення дня</b> на головному</span></li><li><span><b>Струсни телефон</b> — куля спалахне, телефон відгукнеться вібрацією, і передбачення випливе під кулею</span></li><li><span>Одне на день, без переобрання. Минулі живуть у днях календаря</span></li></ol></div>` },
   { bg: 'butter', html: `
     <div class="sx-mid"><p class="sx-kicker">пульс</p><h2 class="sx-h">Колесо балансу</h2>
       <div class="sx-wheel">${wheelSvg({ health: 7, work: 8, money: 5, love: 6, people: 9, growth: 7, rest: 4, home: 6 }, { size: 220 })}</div>
-      <ol class="wn-steps"><li><span>Раз на місяць оціни вісім сфер від 1 до 10</span></li><li><span>Забудеш — після 25-го прийде нагадування</span></li><li><span>Минулі колеса — кнопка <b>Минулі</b></span></li></ol></div>` },
+      <ol class="wn-steps"><li><span>Раз на місяць оціни вісім сфер від 1 до 10, а після 25-го прийде нагадування</span></li><li><span>Одразу отримаєш <b>розбір</b>: на якому ти рівні, що круто, над чим подумати, і один крок на місяць</span></li><li><span><b>Картки-питання</b> на весь екран для саморефлексії: відповіді зберігаються в колесі</span></li></ol></div>` },
   { bg: 'peach', html: `
     <div class="sx-mid"><p class="sx-kicker">гроші</p><h2 class="sx-h">Покупки з календаря</h2>
       <div class="wn-buy"><span class="sb sm c-sand">${sticker('bag')}</span><span class="grow"><b>Нові кросівки</b><span>12 грудня · план 2 400</span></span><span class="pill-when">Куплено</span></div>
